@@ -20,6 +20,7 @@ Before any usage please read the *O'Reilly*'s [Terms of Service](https://learnin
   * [Calibre EPUB conversion](https://github.com/lorenzodifuccia/safaribooks#calibre-epub-conversion)
   * [Example: Download *Test-Driven Development with Python, 2nd Edition*](#download-test-driven-development-with-python-2nd-edition)
   * [Example: Use or not the `--kindle` option](#use-or-not-the---kindle-option)
+  * [Contributors & Credits](docs/CONTRIBUTORS.md)
 
 ## Requirements & Setup:
 First of all, it requires `python3` and `pip3` or `pipenv` to be installed.  
@@ -49,21 +50,76 @@ Since O'Reilly blocks programmatic login, you need to extract cookies from your 
 
 **Step 2:** Get your cookies using one of these methods:
 
-  * **Quick way (browser console):** Open DevTools (F12) → Console tab → paste this snippet → copy the output → save it as `cookies.json` in the project directory:
-    ```javascript
-    JSON.stringify(document.cookie.split(';').reduce((o,c) => {
-      c = c.trim(); let i = c.indexOf('=');
-      o[c.substring(0, i)] = c.substring(i + 1); return o;
-    }, {}))
-    ```
+### Method 1: Paste Mode (Recommended)
 
-  * **Paste mode (default):** Run `python retrieve_cookies.py` — it will prompt you to paste the JSON output from the browser console snippet above.
+Run the cookie helper and paste output from any of the accepted formats:
+```shell
+$ python retrieve_cookies.py
+```
+It auto-detects whether you pasted a JSON dict, a browser extension export, or a raw cookie header — just paste whatever you have.
 
-  * **Auto-extract from browser:** Run `python retrieve_cookies.py -b chrome` (also supports `firefox`, `edge`, `chromium`). Requires the `browser_cookie3` package (`pip install browser_cookie3`).
+To get the JSON from your browser: open DevTools (F12) → Console → paste this snippet → copy the output:
+```javascript
+JSON.stringify(document.cookie.split(';').reduce((o,c) => {
+  c = c.trim(); let i = c.indexOf('=');
+  o[c.substring(0, i)] = c.substring(i + 1); return o;
+}, {}))
+```
 
-Both script modes write `cookies.json` automatically.
+### Method 2: Raw Cookie Header
 
-> **Note:** If you use a shared PC, anyone with access to `cookies.json` can use your session. Delete it when you're done.
+Open DevTools → Network tab → pick any request to `learning.oreilly.com` → right-click → **Copy as cURL** → extract the `Cookie:` header value, then:
+```shell
+$ python retrieve_cookies.py -H 'Cookie: k1=v1; k2=v2; ...'
+```
+
+### Method 3: Browser Extension Export
+
+Install a cookie export extension (e.g. EditThisCookie), navigate to `learning.oreilly.com`, export cookies as JSON, then:
+```shell
+$ python retrieve_cookies.py -f exported_cookies.json
+```
+The extension's array-of-objects format `[{"name":"k","value":"v",...}]` is auto-detected and converted.
+
+### Method 4: Auto-Extract from Browser
+
+```shell
+$ pip install browser_cookie3
+$ python retrieve_cookies.py -b chrome
+```
+Also supports `firefox`, `edge`, `chromium`. The browser should be closed when running this.
+
+### Method 5: Manual `cookies.json`
+
+For advanced users — create `cookies.json` directly in the project directory:
+```json
+{
+  "groot_sessionid": "...",
+  "logged_in": "y",
+  "orm-jwt": "...",
+  "csrf_access_token": "..."
+}
+```
+
+### Validate Existing Cookies
+
+Check whether your `cookies.json` is still valid:
+```shell
+$ python retrieve_cookies.py --validate
+```
+
+### Troubleshooting
+
+| Problem | Solution |
+|---------|----------|
+| **"Out-of-Session"** error | Your cookies expired (typically after ~2 hours). Re-extract them. A backup is saved as `cookies.json.expired`. |
+| **"No cookies found"** | Make sure you're logged in at learning.oreilly.com before extracting. |
+| **Browser auto-extract fails** | Close the browser first, or use paste mode instead. |
+| **Download interrupted** | If your session expires mid-download, you'll be prompted to re-extract cookies and press Enter. Already-downloaded chapters are cached. |
+
+> **Security warning:** `cookies.json` contains your active session — treat it like a password.
+> Delete it when you're done downloading. Never commit it to git (it's already in `.gitignore`).
+> On shared machines, be especially careful — anyone with access to this file can use your O'Reilly session.
 
 ## Usage:
 
@@ -78,17 +134,32 @@ For example: `https://learning.oreilly.com/library/view/test-driven-development-
 $ python3 safaribooks.py XXXXXXXXXXXXX
 ```
 
+You can also pass a full O'Reilly URL instead of the book ID:
+```shell
+$ python3 safaribooks.py https://learning.oreilly.com/library/view/test-driven-development-with/9781491958698/
+```
+
+#### Download multiple books:
+```shell
+$ python3 safaribooks.py 9781491958698 9781492056355 9781492078005
+```
+
+#### Download all books from a playlist:
+```shell
+$ python3 safaribooks.py --playlist 6f612b99-bebc-41e1-8fff-6b655507b7af
+```
+
 #### Program options:
 ```shell
 $ python3 safaribooks.py --help
-usage: safaribooks.py [--kindle] [--preserve-log] [--help]
-                      <BOOK ID>
+usage: safaribooks.py [--kindle] [--preserve-log] [--ssl-skip] [--playlist <PLAYLIST_ID>] [--help]
+                      [<BOOK ID> ...]
 
 Download and generate an EPUB of your favorite books from Safari Books Online.
 
 positional arguments:
-  <BOOK ID>            Book digits ID that you want to download. You can find
-                       it in the URL (X-es):
+  <BOOK ID>            Book digits ID(s) that you want to download. You can
+                       specify multiple IDs. You can find them in the URL:
                        `https://learning.oreilly.com/library/view/book-
                        name/XXXXXXXXXXXXX/`
 
@@ -98,6 +169,11 @@ optional arguments:
                        export the EPUB to E-Readers like Amazon Kindle.
   --preserve-log       Leave the `info_XXXXXXXXXXXXX.log` file even if there
                        isn't any error.
+  --ssl-skip           Skip SSL certificate verification. Useful for corporate
+                       proxies with MITM certificates.
+  --playlist ID        Download all books from a playlist. Provide the playlist UUID.
+  --image-max-size N   Resize images if width/height exceeds N pixels (0 = no resize). Requires Pillow.
+  --image-quality N    JPEG compression quality 1-95 (0 = keep original). Requires Pillow.
   --help               Show this help message.
 
 deprecated (no longer functional):
@@ -107,6 +183,21 @@ deprecated (no longer functional):
 ```
 
 You can configure proxies by setting the environment variable `HTTPS_PROXY` or using the `USE_PROXY` directive in the script.
+
+#### Using Docker:
+```shell
+$ cd safaribooks/
+$ docker build . -t safaribooks
+
+# Extract cookies first (on host):
+$ python3 retrieve_cookies.py
+
+# Run with Docker:
+$ docker run --rm \
+    -v $(pwd)/cookies.json:/app/cookies.json \
+    -v $(pwd)/Books:/app/Books \
+    safaribooks 9781491958698
+```
 
 #### Calibre EPUB conversion
 **Important**: since the script only download HTML pages and create a raw EPUB, many of the CSS and XML/HTML directives are wrong for an E-Reader. To ensure best quality of the output, I suggest you to always convert the `EPUB` obtained by the script to standard-`EPUB` with [Calibre](https://calibre-ebook.com/).
@@ -184,8 +275,18 @@ In this case, I suggest you to convert the `EPUB` to `AZW3` with Calibre or to `
     ![NoKindle Option](https://github.com/lorenzodifuccia/cloudflare/raw/master/Images/safaribooks/safaribooks_example02_NoKindle.png "Version compare")  
     
 ---  
+
+## Contributors & Credits
+
+This fork was built by synthesizing ideas and code from **20+ community PRs** on the upstream repo. Every contribution was evaluated, and the best approaches were combined into a working v2 migration.
+
+**[View the full contributors page](docs/CONTRIBUTORS.md)** — includes everyone who contributed, what they built, how their work was used, and links to their original PRs.
+
+Implementation plans are preserved in [`docs/plans/`](docs/plans/) for full transparency.
+
+---  
   
 ## Thanks!!
 For any kind of problem, please don't hesitate to open an issue here on *GitHub*.  
   
-*Lorenzo Di Fuccia*
+*Original project by [Lorenzo Di Fuccia](https://github.com/lorenzodifuccia)*

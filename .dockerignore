@@ -1,0 +1,14 @@
+__pycache__
+*.pyc
+Books/
+cookies.json
+cookies.json.expired
+*.log
+.git
+.gitignore
+.clawhip
+.serena
+LICENSE.md
+README.md
+Pipfile
+Pipfile.lock

@@ -4,6 +4,7 @@ import re
 import os
 import sys
 import json
+import stat
 import shutil
 import pathlib
 import getpass
@@ -14,8 +15,15 @@ import traceback
 from html import escape
 from random import random
 from lxml import html, etree
-from multiprocessing import Process, Queue, Value
+import asyncio
+from concurrent.futures import ThreadPoolExecutor
 from urllib.parse import urljoin, urlparse, parse_qs, quote_plus, unquote
+
+try:
+    from PIL import Image
+    HAS_PILLOW = True
+except ImportError:
+    HAS_PILLOW = False
 
 
 PATH = os.path.dirname(os.path.realpath(__file__))
@@ -64,12 +72,12 @@ class Display:
         self.logger.info("** Welcome to SafariBooks! **")
 
         self.book_ad_info = False
-        self.css_ad_info = Value("i", 0)
-        self.images_ad_info = Value("i", 0)
+        self.css_ad_info = MutableInt(0)
+        self.images_ad_info = MutableInt(0)
         self.last_request = (None,)
         self.in_error = False
 
-        self.state_status = Value("i", 0)
+        self.state_status = MutableInt(0)
         sys.excepthook = self.unhandled_exception
 
     def set_output_dir(self, output_dir):
@@ -133,8 +141,12 @@ class Display:
 
     def save_last_request(self):
         if any(self.last_request):
+            url, data, others, status, headers, body = self.last_request
+            headers = re.sub(
+                r"(Cookie|Set-Cookie):\s*\S+", r"\1: [REDACTED]", headers, flags=re.IGNORECASE
+            )
             self.log("Last request done:\n\tURL: {0}\n\tDATA: {1}\n\tOTHERS: {2}\n\n\t{3}\n{4}\n\n{5}\n"
-                     .format(*self.last_request))
+                     .format(url, data, others, status, headers, body))
 
     def intro(self):
         output = self.SH_YELLOW + (r"""
@@ -209,21 +221,32 @@ class Display:
 
         else:
             if os.path.isfile(COOKIES_FILE):
-                os.remove(COOKIES_FILE)
+                try:
+                    os.rename(COOKIES_FILE, COOKIES_FILE + ".expired")
+                except OSError:
+                    pass
             detail = " (%s)" % response["detail"] if "detail" in response else ""
             message += "Out-of-Session%s.\n" % detail + \
                        Display.SH_YELLOW + "[+]" + Display.SH_DEFAULT + \
-                       " Please update your `cookies.json` file (see README for instructions)."
+                       " Session cookies expired. Re-extract with: python retrieve_cookies.py"
 
         return message
 
 
-class WinQueue(list):  # TODO: error while use `process` in Windows: can't pickle _thread.RLock objects
+class SimpleCounter:
+    def __init__(self):
+        self._count = 0
+
     def put(self, el):
-        self.append(el)
+        self._count += 1
 
     def qsize(self):
-        return self.__len__()
+        return self._count
+
+
+class MutableInt:
+    def __init__(self, val=0):
+        self.value = val
 
 
 class SafariBooks:
@@ -324,6 +347,11 @@ class SafariBooks:
             self.session.proxies = PROXIES
             self.session.verify = False
 
+        if getattr(args, 'ssl_skip', False):
+            self.session.verify = False
+            import urllib3
+            urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+
         self.session.headers.update(self.HEADERS)
 
         self.jwt = {}
@@ -331,9 +359,16 @@ class SafariBooks:
         if not args.cred:
             if not os.path.isfile(COOKIES_FILE):
                 self.display.exit("Login: unable to find `cookies.json` file.\n"
-                                  "    Please use the `--cred` or `--login` options to perform the login.")
+                                  "    Extract cookies with: python retrieve_cookies.py")
 
             self.session.cookies.update(json.load(open(COOKIES_FILE)))
+
+            from retrieve_cookies import validate_cookies
+            is_valid, warnings = validate_cookies(self.session.cookies.get_dict())
+            for w in warnings:
+                self.display.info("Cookie warning: %s" % w, state=True)
+            if not is_valid:
+                self.display.exit("Cookie validation failed. Re-extract with: python retrieve_cookies.py")
 
         else:
             self.display.info("Logging into Safari Books Online...", state=True)
@@ -376,6 +411,7 @@ class SafariBooks:
         self.chapter_stylesheets = []
         self.css = []
         self.images = []
+        self.videos = []
 
         self.display.info("Downloading book contents... (%s chapters)" % len(self.book_chapters), state=True)
         self.BASE_HTML = self.BASE_01_HTML + (self.KINDLE_HTML if not args.kindle else "") + self.BASE_02_HTML
@@ -383,31 +419,48 @@ class SafariBooks:
         self.cover = False
         self.get()
         if not self.cover:
-            self.cover = self.get_default_cover() if "cover" in self.book_info else False
-            cover_html = self.parse_html(
-                html.fromstring("<div id=\"sbo-rt-content\"><img src=\"Images/{0}\"></div>".format(self.cover)), True
+            has_cover_chapter = any(
+                "cover" in ch.get("filename", "").lower() or "cover" in ch.get("title", "").lower()
+                for ch in self.book_chapters
             )
+            if not has_cover_chapter and "cover" in self.book_info:
+                self.cover = self.get_default_cover()
+                if self.cover:
+                    cover_html = self.parse_html(
+                        html.fromstring(
+                            "<div id=\"sbo-rt-content\"><img src=\"Images/{0}\"></div>".format(self.cover)
+                        ), True
+                    )
+                    self.book_chapters = [{
+                        "filename": "default_cover.xhtml",
+                        "title": "Cover"
+                    }] + self.book_chapters
+                    self.filename = self.book_chapters[0]["filename"]
+                    self.save_page_html(cover_html)
 
-            self.book_chapters = [{
-                "filename": "default_cover.xhtml",
-                "title": "Cover"
-            }] + self.book_chapters
-
-            self.filename = self.book_chapters[0]["filename"]
-            self.save_page_html(cover_html)
-
-        self.css_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
+        self.css_done_queue = SimpleCounter()
         self.display.info("Downloading book CSSs... (%s files)" % len(self.css), state=True)
         self.collect_css()
-        self.images_done_queue = Queue(0) if "win" not in sys.platform else WinQueue()
+
+        self.fonts = []
+        self.fonts_done_queue = SimpleCounter()
+        self.collect_fonts()
+
+        self.images_done_queue = SimpleCounter()
         self.display.info("Downloading book images... (%s files)" % len(self.images), state=True)
         self.collect_images()
+
+        self.collect_videos()
 
         self.display.info("Creating EPUB file...", state=True)
         self.create_epub()
 
         if not args.no_cookies:
             json.dump(self.session.cookies.get_dict(), open(COOKIES_FILE, "w"))
+            try:
+                os.chmod(COOKIES_FILE, stat.S_IRUSR | stat.S_IWUSR)
+            except OSError:
+                pass
 
         self.display.done(os.path.join(self.BOOK_PATH, self.book_id + ".epub"))
         self.display.unregister()
@@ -421,6 +474,46 @@ class SafariBooks:
             if self.COOKIE_FLOAT_MAX_AGE_PATTERN.search(morsel):
                 cookie_key, cookie_value = morsel.split(";")[0].split("=")
                 self.session.cookies.set(cookie_key, cookie_value)
+
+    def _try_cookie_refresh(self):
+        if getattr(self, "_cookie_refresh_attempted", False):
+            return False
+        self._cookie_refresh_attempted = True
+
+        if not os.path.isfile(COOKIES_FILE):
+            return False
+
+        try:
+            with open(COOKIES_FILE) as f:
+                fresh = json.load(f)
+            if fresh != self.session.cookies.get_dict():
+                self.session.cookies.update(fresh)
+                self.display.info("Reloaded cookies from disk.", state=True)
+                return True
+        except (json.JSONDecodeError, OSError):
+            pass
+
+        self.display.info(
+            "Session expired. Re-extract cookies in another terminal:\n"
+            "    python retrieve_cookies.py\n"
+            "Then press Enter to continue, or Ctrl+C to abort.",
+            state=True,
+        )
+        try:
+            input()
+        except (KeyboardInterrupt, EOFError):
+            return False
+
+        if not os.path.isfile(COOKIES_FILE):
+            return False
+        try:
+            with open(COOKIES_FILE) as f:
+                fresh = json.load(f)
+            self.session.cookies.update(fresh)
+            self.display.info("Reloaded cookies after user re-extraction.", state=True)
+            return True
+        except (json.JSONDecodeError, OSError):
+            return False
 
     def requests_provider(self, url, is_post=False, data=None, perform_redirect=True, **kwargs):
         try:
@@ -442,6 +535,12 @@ class SafariBooks:
         except (requests.ConnectionError, requests.ConnectTimeout, requests.RequestException) as request_exception:
             self.display.error(str(request_exception))
             return 0
+
+        if response.status_code in (401, 403) or \
+                (response.is_redirect and "/login" in getattr(response.next, "url", "")):
+            if self._try_cookie_refresh():
+                self._cookie_refresh_attempted = False
+                return self.requests_provider(url, is_post, data, perform_redirect, **kwargs)
 
         if response.is_redirect and perform_redirect:
             return self.requests_provider(response.next.url, is_post, None, perform_redirect)
@@ -517,18 +616,20 @@ class SafariBooks:
         if response == 0:
             self.display.exit("Login: unable to reach Safari Books Online. Try again...")
 
-    @staticmethod
-    def parse_json_response(response):
+    def parse_json_response(self, response):
         if response == 0:
             return None
         if response.status_code != 200:
+            self.display.log("API returned status %d: %s" % (response.status_code, response.text[:500]))
             return None
         content_type = response.headers.get("Content-Type", "")
         if "json" not in content_type and "javascript" not in content_type:
+            self.display.log("Unexpected content type '%s': %s" % (content_type, response.text[:500]))
             return None
         try:
             return response.json()
         except (ValueError, json.JSONDecodeError):
+            self.display.log("JSON parse error: %s" % response.text[:500])
             return None
 
     def _normalize_chapter(self, v2_chapter):
@@ -699,9 +800,22 @@ class SafariBooks:
         return cover_chapters + other_chapters
 
     def get_default_cover(self):
-        response = self.requests_provider(self.book_info["cover"], stream=True)
-        if response == 0:
-            self.display.error("Error trying to retrieve the cover: %s" % self.book_info["cover"])
+        cover_url = self.book_info["cover"]
+        hd_url_attempts = [
+            cover_url.replace("/thumb/", "/orig/"),
+            cover_url.replace("/thumb/", "/"),
+            cover_url.replace("thumbnail", "cover"),
+            cover_url,
+        ]
+        response = None
+        for url in hd_url_attempts:
+            response = self.requests_provider(url, stream=True)
+            if response != 0 and response.status_code == 200:
+                self.display.log("Retrieved HD cover from: %s" % url)
+                break
+
+        if response is None or response == 0 or response.status_code != 200:
+            self.display.error("Error trying to retrieve the cover: %s" % cover_url)
             return False
 
         file_ext = response.headers["Content-Type"].split("/")[-1]
@@ -721,7 +835,10 @@ class SafariBooks:
 
         root = None
         try:
-            root = html.fromstring(response.text, base_url=SAFARI_BASE_URL)
+            html_text = response.text
+            if not re.search("<html", html_text, re.I):
+                html_text = etree.tostring(html.html5parser.fromstring(html_text))
+            root = html.fromstring(html_text, base_url=SAFARI_BASE_URL)
 
         except (html.etree.ParseError, html.etree.ParserError) as parsing_error:
             self.display.error(parsing_error)
@@ -740,11 +857,29 @@ class SafariBooks:
     def is_image_link(url: str):
         return pathlib.Path(url).suffix[1:].lower() in ["jpg", "jpeg", "png", "gif"]
 
+    @staticmethod
+    def is_video_link(url: str):
+        return pathlib.Path(url).suffix[1:].lower() in ["mp4"]
+
+    @staticmethod
+    def is_html_link(url: str):
+        return pathlib.Path(url.split("#")[0].split("?")[0]).suffix[1:].lower() in ["html", "xhtml", "htm"]
+
+    @staticmethod
+    def is_image_implied(url: str):
+        return any(x in url for x in ["cover", "images", "graphics"])
+
+    def is_possible_image(self, link):
+        return self.is_image_link(link) or (not self.is_html_link(link) and self.is_image_implied(link))
+
     def link_replace(self, link):
         if link and not link.startswith("mailto"):
             if not self.url_is_absolute(link):
-                if any(x in link for x in ["cover", "images", "graphics"]) or \
-                        self.is_image_link(link):
+                if self.is_video_link(link):
+                    video = link.split("/")[-1]
+                    return "Video/" + video
+
+                if self.is_possible_image(link):
                     image = link.split("/")[-1]
                     return "Images/" + image
 
@@ -844,6 +979,11 @@ class SafariBooks:
                     svg_root.remove(img.getparent())
                     svg_root.append(new_img)
 
+        video_sources = root.xpath("//div[@id='sbo-rt-content']//video/source/@src")
+        for src in video_sources:
+            if src and src not in self.videos:
+                self.videos.append(src)
+
         book_content = book_content[0]
         book_content.rewrite_links(self.link_replace)
 
@@ -920,6 +1060,10 @@ class SafariBooks:
             os.makedirs(self.images_path)
             self.display.images_ad_info.value = 1
 
+        self.videos_path = os.path.join(oebps, "Video")
+        if not os.path.isdir(self.videos_path):
+            os.makedirs(self.videos_path)
+
     def save_page_html(self, contents):
         self.filename = self.filename.replace(".html", ".xhtml")
         open(os.path.join(self.BOOK_PATH, "OEBPS", self.filename), "wb") \
@@ -986,6 +1130,7 @@ class SafariBooks:
             response = self.requests_provider(url)
             if response == 0:
                 self.display.error("Error trying to retrieve this CSS: %s\n    From: %s" % (css_file, url))
+                return
 
             with open(css_file, 'wb') as s:
                 s.write(response.content)
@@ -1016,28 +1161,45 @@ class SafariBooks:
                 for chunk in response.iter_content(1024):
                     img.write(chunk)
 
+            self._resize_image(image_path)
+
         self.images_done_queue.put(1)
         self.display.state(len(self.images), self.images_done_queue.qsize())
 
-    def _start_multiprocessing(self, operation, full_queue):
-        if len(full_queue) > 5:
-            for i in range(0, len(full_queue), 5):
-                self._start_multiprocessing(operation, full_queue[i:i + 5])
+    def _resize_image(self, image_path):
+        if not HAS_PILLOW:
+            return
+        max_size = self.args.image_max_size
+        quality = self.args.image_quality
+        if max_size == 0 and quality == 0:
+            return
+        try:
+            image = Image.open(image_path)
+            if max_size > 0:
+                image.thumbnail((max_size, max_size))
+            if quality > 0:
+                image.save(image_path, quality=quality)
+            else:
+                image.save(image_path)
+        except Exception:
+            pass
 
-        else:
-            process_queue = [Process(target=operation, args=(arg,)) for arg in full_queue]
-            for proc in process_queue:
-                proc.start()
-
-            for proc in process_queue:
-                proc.join()
+    def _parallel_download(self, operation, items):
+        loop = asyncio.new_event_loop()
+        try:
+            with ThreadPoolExecutor(max_workers=min(5, len(items) or 1)) as executor:
+                futures = [loop.run_in_executor(executor, operation, item) for item in items]
+                loop.run_until_complete(asyncio.gather(*futures))
+        finally:
+            loop.close()
 
     def collect_css(self):
         self.display.state_status.value = -1
-
-        # "self._start_multiprocessing" seems to cause problem. Switching to mono-thread download.
-        for css_url in self.css:
-            self._thread_download_css(css_url)
+        if len(self.css) > 1:
+            self._parallel_download(self._thread_download_css, self.css)
+        else:
+            for css_url in self.css:
+                self._thread_download_css(css_url)
 
     def collect_images(self):
         if self.display.book_ad_info == 2:
@@ -1047,10 +1209,80 @@ class SafariBooks:
                               "' and restart the program.")
 
         self.display.state_status.value = -1
+        if len(self.images) > 1:
+            self._parallel_download(self._thread_download_images, self.images)
+        else:
+            for image_url in self.images:
+                self._thread_download_images(image_url)
 
-        # "self._start_multiprocessing" seems to cause problem. Switching to mono-thread download.
-        for image_url in self.images:
-            self._thread_download_images(image_url)
+    def collect_fonts(self):
+        font_urls = set()
+        for css_file in os.listdir(self.css_path):
+            if not css_file.endswith(".css"):
+                continue
+            try:
+                with open(os.path.join(self.css_path, css_file), 'r', errors='ignore') as f:
+                    content = f.read()
+                for match in re.finditer(r'url\(([^)]*\.(?:otf|ttf|woff|woff2))\)', content):
+                    font_urls.add(match.group(1).strip('\'"'))
+            except Exception:
+                pass
+
+        if not font_urls:
+            return
+
+        self.fonts = list(font_urls)
+        self.display.info("Downloading book fonts... (%s files)" % len(self.fonts), state=True)
+        self.display.state_status.value = -1
+
+        for font_name in self.fonts:
+            font_path = os.path.join(self.css_path, os.path.basename(font_name))
+            if os.path.isfile(font_path):
+                self.fonts_done_queue.put(1)
+                self.display.state(len(self.fonts), self.fonts_done_queue.qsize())
+                continue
+
+            url = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:%s/files/%s" % (self.book_id, font_name)
+            response = self.requests_provider(url, stream=True)
+            if response == 0:
+                self.display.error("Error trying to retrieve font: %s" % font_name)
+            else:
+                with open(font_path, 'wb') as f:
+                    for chunk in response.iter_content(1024):
+                        f.write(chunk)
+
+            self.fonts_done_queue.put(1)
+            self.display.state(len(self.fonts), self.fonts_done_queue.qsize())
+
+    def _thread_download_video(self, url):
+        video_name = url.split("/")[-1]
+        video_path = os.path.join(self.videos_path, video_name)
+        if os.path.isfile(video_path):
+            self.videos_done_queue.put(1)
+            self.display.state(len(self.videos), self.videos_done_queue.qsize())
+            return
+
+        response = self.requests_provider(urljoin(SAFARI_BASE_URL, url), stream=True)
+        if response == 0:
+            self.display.error("Error trying to retrieve this video: %s\n    From: %s" % (video_name, url))
+        else:
+            with open(video_path, 'wb') as v:
+                for chunk in response.iter_content(1024):
+                    v.write(chunk)
+
+        self.videos_done_queue.put(1)
+        self.display.state(len(self.videos), self.videos_done_queue.qsize())
+
+    def collect_videos(self):
+        if not self.videos:
+            return
+
+        self.videos_done_queue = SimpleCounter()
+        self.display.info("Downloading book videos... (%s files)" % len(self.videos), state=True)
+        self.display.state_status.value = -1
+
+        for video_url in self.videos:
+            self._thread_download_video(video_url)
 
     def create_content_opf(self):
         self.css = next(os.walk(self.css_path))[2]
@@ -1078,12 +1310,39 @@ class SafariBooks:
             manifest.append("<item id=\"style_{0:0>2}\" href=\"Styles/Style{0:0>2}.css\" "
                             "media-type=\"text/css\" />".format(i))
 
+        font_mimetypes = {"otf": "font/otf", "ttf": "font/ttf", "woff": "font/woff", "woff2": "font/woff2"}
+        font_files = [f for f in os.listdir(self.css_path)
+                      if f.split(".")[-1].lower() in font_mimetypes]
+        for font_file in font_files:
+            ext = font_file.split(".")[-1].lower()
+            font_id = "font_" + escape("".join(font_file.split(".")[:-1]))
+            manifest.append("<item id=\"{0}\" href=\"Styles/{1}\" media-type=\"{2}\" />".format(
+                font_id, font_file, font_mimetypes[ext]
+            ))
+
+        if os.path.isdir(self.videos_path):
+            video_files = os.listdir(self.videos_path)
+            for video_file in video_files:
+                ext = video_file.split(".")[-1].lower()
+                video_id = "video_" + escape("".join(video_file.split(".")[:-1]))
+                manifest.append("<item id=\"{0}\" href=\"Video/{1}\" media-type=\"video/{2}\" />".format(
+                    video_id, video_file, ext
+                ))
+
         authors = "\n".join("<dc:creator opf:file-as=\"{0}\" opf:role=\"aut\">{0}</dc:creator>".format(
             escape(aut.get("name", "n/d"))
         ) for aut in self.book_info.get("authors", []))
 
         subjects = "\n".join("<dc:subject>{0}</dc:subject>".format(escape(sub.get("name", "n/d")))
                              for sub in self.book_info.get("subjects", []))
+
+        cover_id = self.cover
+        if cover_id:
+            match = re.search(r'/(\w+)\.', cover_id)
+            if match is None:
+                match = re.search(r'(\w+)\.', cover_id)
+            if match is not None:
+                cover_id = "img_" + match.group(1)
 
         return self.CONTENT_OPF.format(
             (self.book_info.get("isbn",  self.book_id)),
@@ -1094,7 +1353,7 @@ class SafariBooks:
             ", ".join(escape(pub.get("name", "")) for pub in self.book_info.get("publishers", [])),
             escape(self.book_info.get("rights", "")),
             self.book_info.get("issued", ""),
-            self.cover,
+            cover_id if cover_id else self.cover,
             "\n".join(manifest),
             "\n".join(spine),
             self.book_chapters[0]["filename"].replace(".html", ".xhtml")
@@ -1217,11 +1476,28 @@ if __name__ == "__main__":
         "--preserve-log", dest="log", action='store_true', help="Leave the `info_XXXXXXXXXXXXX.log`"
                                                                 " file even if there isn't any error."
     )
+    arguments.add_argument(
+        "--image-max-size", dest="image_max_size", type=int, default=0,
+        help="Resize images if width/height exceeds this value (0 = no resize). Requires Pillow."
+    )
+    arguments.add_argument(
+        "--image-quality", dest="image_quality", type=int, default=0,
+        help="JPEG compression quality 1-95 (0 = keep original). Requires Pillow."
+    )
+    arguments.add_argument(
+        "--ssl-skip", dest="ssl_skip", action='store_true',
+        help="Skip SSL certificate verification. Useful for corporate proxies with MITM certificates."
+    )
+    arguments.add_argument(
+        "--playlist", metavar="<PLAYLIST_ID>", default=None,
+        help="Download all books from a playlist. Provide the playlist UUID."
+    )
     arguments.add_argument("--help", action="help", default=argparse.SUPPRESS, help='Show this help message.')
     arguments.add_argument(
-        "bookid", metavar='<BOOK ID>',
+        "bookid", metavar='<BOOK ID>', nargs='*',
         help="Book digits ID that you want to download. You can find it in the URL (X-es):"
              " `" + SAFARI_BASE_URL + "/library/view/book-name/XXXXXXXXXXXXX/`"
+             " You can specify multiple IDs to download several books."
     )
 
     args_parsed = arguments.parse_args()
@@ -1238,6 +1514,87 @@ if __name__ == "__main__":
         if args_parsed.no_cookies:
             arguments.error("invalid option: `--no-cookies` is valid only if you use the `--cred` option")
 
-    SafariBooks(args_parsed)
-    # Hint: do you want to download more then one book once, initialized more than one instance of `SafariBooks`...
+    def extract_book_id(raw_id):
+        url_match = re.match(r'https?://.*?/(\d{10,15})/?', raw_id)
+        if url_match:
+            return url_match.group(1)
+        if raw_id.isdecimal():
+            return raw_id
+        id_match = re.match(r'(\d{10,15})$', raw_id)
+        if id_match:
+            return id_match.group(1)
+        return None
+
+    def get_playlist_book_ids(playlist_id):
+        if not os.path.isfile(COOKIES_FILE):
+            print("[#] Error: cookies.json required for playlist access.")
+            sys.exit(1)
+
+        session = requests.Session()
+        session.cookies.update(json.load(open(COOKIES_FILE)))
+        session.headers.update(SafariBooks.HEADERS)
+
+        collections_url = SAFARI_BASE_URL + "/api/v2/collections/"
+        response = session.get(collections_url)
+        if response.status_code != 200:
+            print("[#] Error: unable to retrieve playlists (status %d)." % response.status_code)
+            sys.exit(1)
+
+        try:
+            data = response.json()
+        except (ValueError, json.JSONDecodeError):
+            print("[#] Error: unable to parse playlist response.")
+            sys.exit(1)
+
+        playlists = data if isinstance(data, list) else data.get("results", [])
+        target = None
+        for pl in playlists:
+            if pl.get("uuid") == playlist_id or pl.get("slug") == playlist_id:
+                target = pl
+                break
+
+        if not target:
+            print("[#] Error: playlist '%s' not found." % playlist_id)
+            sys.exit(1)
+
+        book_ids = []
+        for item in target.get("content", []):
+            ourn = item.get("ourn", item.get("identifier", ""))
+            match = re.match(r'^urn:orm:book:(\d+)', ourn)
+            if match:
+                book_ids.append(match.group(1))
+        return book_ids
+
+    book_ids = []
+
+    if args_parsed.playlist:
+        playlist_books = get_playlist_book_ids(args_parsed.playlist)
+        print("[*] Found %d books in playlist." % len(playlist_books))
+        book_ids.extend(playlist_books)
+
+    for raw_id in args_parsed.bookid:
+        extracted = extract_book_id(raw_id)
+        if extracted:
+            book_ids.append(extracted)
+        else:
+            print("[#] Warning: skipping invalid book ID '%s'." % raw_id)
+
+    seen = set()
+    book_ids = [bid for bid in book_ids if not (bid in seen or seen.add(bid))]
+
+    if not book_ids:
+        arguments.error("no valid book IDs provided. Specify at least one book ID or use --playlist.")
+
+    for i, bid in enumerate(book_ids):
+        if len(book_ids) > 1:
+            print("\n[*] Downloading book %d of %d: %s" % (i + 1, len(book_ids), bid))
+        args_parsed.bookid = bid
+        try:
+            SafariBooks(args_parsed)
+        except Exception as e:
+            if len(book_ids) > 1:
+                print("[#] Error downloading book %s: %s. Continuing..." % (bid, str(e)))
+            else:
+                raise
+
     sys.exit(0)
