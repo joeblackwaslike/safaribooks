@@ -231,7 +231,7 @@ class SafariBooks:
     API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:{0}/"
     CHAPTERS_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epub-chapters/?epub_identifier=urn:orm:book:{0}"
     SEARCH_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/search/?query={0}&limit=1&formats=book"
-    FILES_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:{0}/files/"
+    FILES_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:{0}/files"
 
     BASE_01_HTML = "<!DOCTYPE html>\n" \
                    "<html lang=\"en\" xml:lang=\"en\" xmlns=\"http://www.w3.org/1999/xhtml\"" \
@@ -516,7 +516,7 @@ class SafariBooks:
             self.display.exit("Login: unable to reach Safari Books Online. Try again...")
 
     @staticmethod
-    def parse_json_response(response, context="API"):
+    def parse_json_response(response):
         if response == 0:
             return None
         if response.status_code != 200:
@@ -534,6 +534,9 @@ class SafariBooks:
         if not filename:
             ourn = v2_chapter.get("ourn", "")
             filename = unquote(ourn.split(":")[-1]) if ":" in ourn else v2_chapter.get("reference_id", "").split("/")[-1]
+
+        if not filename:
+            filename = "chapter_%d.html" % abs(hash(v2_chapter.get("content_url", v2_chapter.get("ourn", ""))))
 
         content_url = v2_chapter.get("content_url", v2_chapter.get("content", ""))
         asset_base_url = self.FILES_API_TEMPLATE.format(self.book_id)
@@ -579,7 +582,7 @@ class SafariBooks:
             result.append({
                 "depth": depth,
                 "fragment": fragment,
-                "id": entry_id if entry_id else ("toc_" + str(len(result))),
+                "id": entry_id if entry_id else ("toc_%d_%d" % (depth, len(result))),
                 "label": label,
                 "href": href,
                 "children": children,
@@ -590,9 +593,12 @@ class SafariBooks:
         try:
             search_url = self.SEARCH_API_TEMPLATE.format(self.book_id)
             response = self.requests_provider(search_url)
-            data = self.parse_json_response(response, "search")
+            data = self.parse_json_response(response)
             if data and "results" in data and len(data["results"]) > 0:
                 result = data["results"][0]
+                result_id = str(result.get("isbn", result.get("identifier", "")))
+                if self.book_id not in result_id and result.get("archive_id", "") != self.book_id:
+                    return
                 if "authors" in result and result["authors"]:
                     book_info["authors"] = [{"name": a} for a in result["authors"]]
                 if "publishers" in result:
@@ -620,7 +626,7 @@ class SafariBooks:
         if response == 0:
             self.display.exit("Login: unable to reach Safari Books Online. Try again...")
 
-        elif response.status_code != 200:
+        elif response.status_code != 200 or "/login" in getattr(response, "url", ""):
             self.display.exit("Authentication issue: unable to access profile page.")
 
         elif "user_type\":\"Expired\"" in response.text:
@@ -633,7 +639,7 @@ class SafariBooks:
         if response == 0:
             self.display.exit("API: unable to retrieve book info.")
 
-        data = self.parse_json_response(response, "book info")
+        data = self.parse_json_response(response)
         if data is None or not isinstance(data, dict) or "title" not in data:
             self.display.exit(self.display.api_error(data if data else {}))
 
@@ -672,7 +678,7 @@ class SafariBooks:
             if response == 0:
                 self.display.exit("API: unable to retrieve book chapters.")
 
-            data = self.parse_json_response(response, "chapters")
+            data = self.parse_json_response(response)
             if data is None or not isinstance(data, dict):
                 self.display.exit(self.display.api_error(data if data else {}))
 
@@ -1123,7 +1129,7 @@ class SafariBooks:
                               "Don't delete any files, just run again this program"
                               " in order to complete the `.epub` creation!")
 
-        data = self.parse_json_response(response, "TOC")
+        data = self.parse_json_response(response)
         if data is None:
             self.display.exit(
                 "API: unable to parse TOC response."
