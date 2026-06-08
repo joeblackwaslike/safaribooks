@@ -5,19 +5,18 @@ Before any usage please read the *O'Reilly*'s [Terms of Service](https://learnin
 
 <a href='https://ko-fi.com/Y8Y0MPEGU' target='_blank'><img height='80' style='border:0px;height:60px;' src='https://storage.ko-fi.com/cdn/kofi6.png?v=6' border='0' alt='Buy Me a Coffee at ko-fi.com'/></a>
 
-## ✨✨ *Attention needed* ✨✨
-- This project is no longer actively maintained.  
-- *Login through `safaribooks` no longer works due to changes in ORLY APIs.*
-- *The program needs a major refactor to include new features and integrate new APIs.*
-- **However... it still work for downloading books.**  
-(Use SSO hack: log in via browser, then copy cookies into `cookies.json`, see below and issues. Love ❤️)
+## Note
+
+- Login through `--cred` / `--login` no longer works (O'Reilly blocks programmatic login).
+- **Authentication is now cookie-based only.** See [Getting Cookies](#getting-cookies) below.
+- The tool has been updated to use O'Reilly's v2 API.
 
 ---
 
 ## Overview:
   * [Requirements & Setup](#requirements--setup)
+  * [Getting Cookies](#getting-cookies)
   * [Usage](#usage)
-  * [Single Sign-On (SSO), Company, University Login](https://github.com/lorenzodifuccia/safaribooks/issues/150#issuecomment-555423085)
   * [Calibre EPUB conversion](https://github.com/lorenzodifuccia/safaribooks#calibre-epub-conversion)
   * [Example: Download *Test-Driven Development with Python, 2nd Edition*](#download-test-driven-development-with-python-2nd-edition)
   * [Example: Use or not the `--kindle` option](#use-or-not-the---kindle-option)
@@ -42,24 +41,46 @@ lxml>=4.1.1
 requests>=2.20.0
 ```
   
-## Usage:
-It's really simple to use, just choose a book from the library and replace in the following command:
-  * X-es with its ID, 
-  * `email:password` with your own. 
+## Getting Cookies
 
+Since O'Reilly blocks programmatic login, you need to extract cookies from your browser session.
+
+**Step 1:** Log in to [https://learning.oreilly.com](https://learning.oreilly.com) in your browser.
+
+**Step 2:** Get your cookies using one of these methods:
+
+  * **Quick way (browser console):** Open DevTools (F12) → Console tab → paste this snippet → copy the output → save it as `cookies.json` in the project directory:
+    ```javascript
+    JSON.stringify(document.cookie.split(';').reduce((o,c) => {
+      let [k,v] = c.trim().split('='); o[k] = v; return o;
+    }, {}))
+    ```
+
+  * **Paste mode (default):** Run `python retrieve_cookies.py` — it will prompt you to paste the JSON output from the browser console snippet above.
+
+  * **Auto-extract from browser:** Run `python retrieve_cookies.py -b chrome` (also supports `firefox`, `edge`, `chromium`). Requires the `browser_cookie3` package (`pip install browser_cookie3`).
+
+Both script modes write `cookies.json` automatically.
+
+> **Note:** If you use a shared PC, anyone with access to `cookies.json` can use your session. Delete it when you're done.
+
+## Usage:
+
+**Step 1:** Extract your cookies (see [Getting Cookies](#getting-cookies) above).
+
+**Step 2:** Find the book ID — it's the digits in the URL of the book page:  
+`https://learning.oreilly.com/library/view/book-name/XXXXXXXXXXXXX/`  
+For example: `https://learning.oreilly.com/library/view/test-driven-development-with/9781491958698/`
+
+**Step 3:** Run:
 ```shell
-$ python3 safaribooks.py --cred "account_mail@mail.com:password01" XXXXXXXXXXXXX
+$ python3 safaribooks.py XXXXXXXXXXXXX
 ```
 
-The ID is the digits that you find in the URL of the book description page:  
-`https://www.safaribooksonline.com/library/view/book-name/XXXXXXXXXXXXX/`  
-Like: `https://www.safaribooksonline.com/library/view/test-driven-development-with/9781491958698/`  
-  
 #### Program options:
 ```shell
 $ python3 safaribooks.py --help
-usage: safaribooks.py [--cred <EMAIL:PASS> | --login] [--no-cookies]
-                      [--kindle] [--preserve-log] [--help]
+usage: safaribooks.py [--kindle] [--preserve-log] [--help]
                       <BOOK ID>
 
 Download and generate an EPUB of your favorite books from Safari Books Online.
@@ -71,29 +92,20 @@ positional arguments:
                        name/XXXXXXXXXXXXX/`
 
 optional arguments:
-  --cred <EMAIL:PASS>  Credentials used to perform the auth login on Safari
-                       Books Online. Es. ` --cred
-                       "account_mail@mail.com:password01" `.
-  --login              Prompt for credentials used to perform the auth login
-                       on Safari Books Online.
-  --no-cookies         Prevent your session data to be saved into
-                       `cookies.json` file.
   --kindle             Add some CSS rules that block overflow on `table` and
                        `pre` elements. Use this option if you're going to
                        export the EPUB to E-Readers like Amazon Kindle.
   --preserve-log       Leave the `info_XXXXXXXXXXXXX.log` file even if there
                        isn't any error.
   --help               Show this help message.
-```
-  
-The first time you use the program, you'll have to specify your Safari Books Online account credentials (look [`here`](/../../issues/15) for special character).  
-The next times you'll download a book, before session expires, you can omit the credential, because the program save your session cookies in a file called `cookies.json`.  
-For **SSO**, please use the `sso_cookies.py` program in order to create the `cookies.json` file from the SSO cookies retrieved by your browser session (please follow [`these steps`](/../../issues/150#issuecomment-555423085)).  
-  
-Pay attention if you use a shared PC, because everyone that has access to your files can steal your session. 
-If you don't want to cache the cookies, just use the `--no-cookies` option and provide all time your credential through the `--cred` option or the more safe `--login` one: this will prompt you for credential during the script execution.
 
-You can configure proxies by setting on your system the environment variable `HTTPS_PROXY` or using the `USE_PROXY` directive into the script.
+deprecated (no longer functional):
+  --cred <EMAIL:PASS>  No longer works. Use cookies.json instead.
+  --login              No longer works. Use cookies.json instead.
+  --no-cookies         No longer relevant with cookie-based auth.
+```
+
+You can configure proxies by setting the environment variable `HTTPS_PROXY` or using the `USE_PROXY` directive in the script.
 
 #### Calibre EPUB conversion
 **Important**: since the script only download HTML pages and create a raw EPUB, many of the CSS and XML/HTML directives are wrong for an E-Reader. To ensure best quality of the output, I suggest you to always convert the `EPUB` obtained by the script to standard-`EPUB` with [Calibre](https://calibre-ebook.com/).
@@ -109,27 +121,26 @@ In this case, I suggest you to convert the `EPUB` to `AZW3` with Calibre or to `
 ![Calibre IgnoreMargins](https://github.com/lorenzodifuccia/cloudflare/raw/master/Images/safaribooks/safaribooks_calibre_IgnoreMargins.png "Select Ignore margins")  
   
 ## Examples:
-  * ## Download [Test-Driven Development with Python, 2nd Edition](https://www.safaribooksonline.com/library/view/test-driven-development-with/9781491958698/):  
+  * ## Download [Test-Driven Development with Python, 2nd Edition](https://learning.oreilly.com/library/view/test-driven-development-with/9781491958698/):  
     ```shell
-    $ python3 safaribooks.py --cred "my_email@gmail.com:MyPassword1!" 9781491958698
+    $ python3 safaribooks.py 9781491958698
 
            ____     ___         _ 
           / __/__ _/ _/__ _____(_)
          _\ \/ _ `/ _/ _ `/ __/ / 
         /___/\_,_/_/ \_,_/_/ /_/  
           / _ )___  ___  / /__ ___
-         / _  / _ \/ _ \/  '_/(_-<
+         / _  / _ \/ _ \/  ‘_/(_-<
         /____/\___/\___/_/\_\/___/
 
     ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-    [-] Logging into Safari Books Online...
     [*] Retrieving book info... 
     [-] Title: Test-Driven Development with Python, 2nd Edition                     
     [-] Authors: Harry J.W. Percival                                                
     [-] Identifier: 9781491958698                                                   
     [-] ISBN: 9781491958704                                                         
-    [-] Publishers: O'Reilly Media, Inc.                                            
-    [-] Rights: Copyright © O'Reilly Media, Inc.                                    
+    [-] Publishers: O’Reilly Media, Inc.                                            
+    [-] Rights: Copyright © O’Reilly Media, Inc.                                    
     [-] Description: By taking you through the development of a real web application 
     from beginning to end, the second edition of this hands-on guide demonstrates the 
     practical advantages of test-driven development (TDD) with Python. You’ll learn 
@@ -154,7 +165,7 @@ In this case, I suggest you to convert the `EPUB` to `AZW3` with Calibre or to `
     
         If you like it, please * this project on GitHub to make it known:
             https://github.com/lorenzodifuccia/safaribooks
-        e don't forget to renew your Safari Books Online subscription:
+        e don’t forget to renew your Safari Books Online subscription:
             https://learning.oreilly.com
     
     [!] Bye!!
