@@ -52,7 +52,8 @@ Since O'Reilly blocks programmatic login, you need to extract cookies from your 
   * **Quick way (browser console):** Open DevTools (F12) → Console tab → paste this snippet → copy the output → save it as `cookies.json` in the project directory:
     ```javascript
     JSON.stringify(document.cookie.split(';').reduce((o,c) => {
-      let [k,v] = c.trim().split('='); o[k] = v; return o;
+      c = c.trim(); let i = c.indexOf('=');
+      o[c.substring(0, i)] = c.substring(i + 1); return o;
     }, {}))
     ```
 

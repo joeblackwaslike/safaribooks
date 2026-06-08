@@ -208,10 +208,12 @@ class Display:
                        "    `" + SAFARI_BASE_URL + "/library/view/book-name/XXXXXXXXXXXXX/`"
 
         else:
-            os.remove(COOKIES_FILE)
-            message += "Out-of-Session%s.\n" % (" (%s)" % response["detail"]) if "detail" in response else "" + \
+            if os.path.isfile(COOKIES_FILE):
+                os.remove(COOKIES_FILE)
+            detail = " (%s)" % response["detail"] if "detail" in response else ""
+            message += "Out-of-Session%s.\n" % detail + \
                        Display.SH_YELLOW + "[+]" + Display.SH_DEFAULT + \
-                       " Use the `--cred` or `--login` options in order to perform the auth login to Safari."
+                       " Please update your `cookies.json` file (see README for instructions)."
 
         return message
 

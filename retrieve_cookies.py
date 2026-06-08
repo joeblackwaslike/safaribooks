@@ -9,7 +9,7 @@ except ImportError:
 
 BROWSER_JS = """
 // Run this in your browser console on https://learning.oreilly.com:
-JSON.stringify(document.cookie.split(';').reduce((o,c) => { let [k,v] = c.trim().split('='); o[k] = v; return o; }, {}))
+JSON.stringify(document.cookie.split(';').reduce((o,c) => { c=c.trim(); let i=c.indexOf('='); o[c.substring(0,i)]=c.substring(i+1); return o; }, {}))
 """.strip()
 
 
@@ -34,9 +34,14 @@ def from_paste():
     print("Paste the JSON output from your browser console, then press Enter:")
     print("  (Run this in console on learning.oreilly.com: %s)\n" % BROWSER_JS.split('\n')[-1])
     raw = input("> ").strip()
-    if raw.startswith('"') and raw.endswith('"'):
-        raw = json.loads(raw)
-    return json.loads(raw)
+    try:
+        if raw.startswith('"') and raw.endswith('"'):
+            raw = json.loads(raw)
+        return json.loads(raw)
+    except (json.JSONDecodeError, ValueError) as e:
+        print("Error: invalid JSON. Make sure you copied the full output from the browser console.")
+        print("  Details: %s" % e)
+        sys.exit(1)
 
 
 def main():
