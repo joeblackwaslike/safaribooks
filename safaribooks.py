@@ -10,6 +10,7 @@ import pathlib
 import getpass
 import logging
 import argparse
+import threading
 import requests
 import traceback
 from html import escape
@@ -143,7 +144,7 @@ class Display:
         if any(self.last_request):
             url, data, others, status, headers, body = self.last_request
             headers = re.sub(
-                r"(Cookie|Set-Cookie):\s*\S+", r"\1: [REDACTED]", headers, flags=re.IGNORECASE
+                r"(Cookie|Set-Cookie):\s*.+", r"\1: [REDACTED]", headers, flags=re.IGNORECASE
             )
             self.log("Last request done:\n\tURL: {0}\n\tDATA: {1}\n\tOTHERS: {2}\n\n\t{3}\n{4}\n\n{5}\n"
                      .format(url, data, others, status, headers, body))
@@ -207,13 +208,19 @@ class Display:
         self.info("Done: %s\n\n" % epub_file +
                   "    If you like it, please * this project on GitHub to make it known:\n"
                   "        https://github.com/lorenzodifuccia/safaribooks\n"
-                  "    e don't forget to renew your Safari Books Online subscription:\n"
+                  "    And don't forget to renew your Safari Books Online subscription:\n"
                   "        " + SAFARI_BASE_URL + "\n\n" +
                   self.SH_BG_RED + "[!]" + self.SH_DEFAULT + " Bye!!")
 
     @staticmethod
     def api_error(response):
         message = "API: "
+        if not isinstance(response, dict):
+            message += "Unexpected API response (type: %s).\n" % type(response).__name__ + \
+                       Display.SH_YELLOW + "[+]" + Display.SH_DEFAULT + \
+                       " Session cookies may be expired. Re-extract with: python retrieve_cookies.py"
+            return message
+
         if "detail" in response and "Not found" in response["detail"]:
             message += "book's not present in Safari Books Online.\n" \
                        "    The book identifier is the digits that you can find in the URL:\n" \
@@ -223,10 +230,11 @@ class Display:
             if os.path.isfile(COOKIES_FILE):
                 try:
                     os.rename(COOKIES_FILE, COOKIES_FILE + ".expired")
-                except OSError:
-                    pass
+                except OSError as e:
+                    logging.getLogger("SafariBooks").info(
+                        "Could not rename expired cookies file: %s" % e)
             detail = " (%s)" % response["detail"] if "detail" in response else ""
-            message += "Out-of-Session%s.\n" % detail + \
+            message += ("Out-of-Session%s.\n" % detail) + \
                        Display.SH_YELLOW + "[+]" + Display.SH_DEFAULT + \
                        " Session cookies expired. Re-extract with: python retrieve_cookies.py"
 
@@ -236,12 +244,15 @@ class Display:
 class SimpleCounter:
     def __init__(self):
         self._count = 0
+        self._lock = threading.Lock()
 
     def put(self, el):
-        self._count += 1
+        with self._lock:
+            self._count += 1
 
     def qsize(self):
-        return self._count
+        with self._lock:
+            return self._count
 
 
 class MutableInt:
@@ -361,20 +372,34 @@ class SafariBooks:
                 self.display.exit("Login: unable to find `cookies.json` file.\n"
                                   "    Extract cookies with: python retrieve_cookies.py")
 
-            self.session.cookies.update(json.load(open(COOKIES_FILE)))
+            try:
+                with open(COOKIES_FILE, "r", encoding="utf-8") as f:
+                    self.session.cookies.update(json.load(f))
+            except json.JSONDecodeError as e:
+                self.display.exit("Login: `cookies.json` is corrupted: %s\n"
+                                  "    Re-extract with: python retrieve_cookies.py" % e)
+            except OSError as e:
+                self.display.exit("Login: unable to read `cookies.json`: %s" % e)
 
-            from retrieve_cookies import validate_cookies
-            is_valid, warnings = validate_cookies(self.session.cookies.get_dict())
-            for w in warnings:
-                self.display.info("Cookie warning: %s" % w, state=True)
-            if not is_valid:
-                self.display.exit("Cookie validation failed. Re-extract with: python retrieve_cookies.py")
+            try:
+                from retrieve_cookies import validate_cookies
+            except ImportError:
+                self.display.info("Warning: retrieve_cookies.py not found, skipping cookie validation.", state=True)
+                validate_cookies = None
+
+            if validate_cookies:
+                is_valid, warnings = validate_cookies(self.session.cookies.get_dict())
+                for w in warnings:
+                    self.display.info("Cookie warning: %s" % w, state=True)
+                if not is_valid:
+                    self.display.exit("Cookie validation failed. Re-extract with: python retrieve_cookies.py")
 
         else:
             self.display.info("Logging into Safari Books Online...", state=True)
             self.do_login(*args.cred)
             if not args.no_cookies:
-                json.dump(self.session.cookies.get_dict(), open(COOKIES_FILE, 'w'))
+                with open(COOKIES_FILE, 'w') as f:
+                    json.dump(self.session.cookies.get_dict(), f)
 
         self.check_login()
 
@@ -456,7 +481,8 @@ class SafariBooks:
         self.create_epub()
 
         if not args.no_cookies:
-            json.dump(self.session.cookies.get_dict(), open(COOKIES_FILE, "w"))
+            with open(COOKIES_FILE, "w") as f:
+                json.dump(self.session.cookies.get_dict(), f)
             try:
                 os.chmod(COOKIES_FILE, stat.S_IRUSR | stat.S_IWUSR)
             except OSError:
@@ -492,6 +518,10 @@ class SafariBooks:
                 return True
         except (json.JSONDecodeError, OSError):
             pass
+
+        if not sys.stdin.isatty():
+            self.display.error("Session expired and stdin is not interactive. Cannot prompt for cookie refresh.")
+            return False
 
         self.display.info(
             "Session expired. Re-extract cookies in another terminal:\n"
@@ -800,7 +830,10 @@ class SafariBooks:
         return cover_chapters + other_chapters
 
     def get_default_cover(self):
-        cover_url = self.book_info["cover"]
+        cover_url = self.book_info.get("cover")
+        if not cover_url:
+            self.display.log("No cover URL available for this book.")
+            return False
         hd_url_attempts = [
             cover_url.replace("/thumb/", "/orig/"),
             cover_url.replace("/thumb/", "/"),
@@ -859,7 +892,7 @@ class SafariBooks:
 
     @staticmethod
     def is_video_link(url: str):
-        return pathlib.Path(url).suffix[1:].lower() in ["mp4"]
+        return pathlib.Path(url.split("?")[0].split("#")[0]).suffix[1:].lower() in ["mp4"]
 
     @staticmethod
     def is_html_link(url: str):
@@ -1127,9 +1160,11 @@ class SafariBooks:
                 self.display.css_ad_info.value = 1
 
         else:
-            response = self.requests_provider(url)
-            if response == 0:
-                self.display.error("Error trying to retrieve this CSS: %s\n    From: %s" % (css_file, url))
+            session = self._get_thread_session()
+            try:
+                response = session.get(url)
+            except (requests.ConnectionError, requests.ConnectTimeout, requests.RequestException) as e:
+                self.display.error("Error trying to retrieve this CSS: %s\n    From: %s\n    %s" % (css_file, url, e))
                 return
 
             with open(css_file, 'wb') as s:
@@ -1152,9 +1187,11 @@ class SafariBooks:
                 self.display.images_ad_info.value = 1
 
         else:
-            response = self.requests_provider(urljoin(SAFARI_BASE_URL, url), stream=True)
-            if response == 0:
-                self.display.error("Error trying to retrieve this image: %s\n    From: %s" % (image_name, url))
+            session = self._get_thread_session()
+            try:
+                response = session.get(urljoin(SAFARI_BASE_URL, url), stream=True)
+            except (requests.ConnectionError, requests.ConnectTimeout, requests.RequestException) as e:
+                self.display.error("Error trying to retrieve this image: %s\n    From: %s\n    %s" % (image_name, url, e))
                 return
 
             with open(image_path, 'wb') as img:
@@ -1174,15 +1211,33 @@ class SafariBooks:
         if max_size == 0 and quality == 0:
             return
         try:
-            image = Image.open(image_path)
-            if max_size > 0:
-                image.thumbnail((max_size, max_size))
-            if quality > 0:
-                image.save(image_path, quality=quality)
-            else:
-                image.save(image_path)
-        except Exception:
-            pass
+            with Image.open(image_path) as image:
+                if max_size > 0:
+                    image.thumbnail((max_size, max_size))
+                if quality > 0:
+                    image.save(image_path, quality=quality)
+                else:
+                    image.save(image_path)
+        except (OSError, ValueError) as e:
+            self.display.log("Warning: could not resize image %s: %s" % (image_path, e))
+
+    def _make_thread_session(self):
+        s = requests.Session()
+        s.cookies.update(self.session.cookies.get_dict())
+        s.headers.update(self.session.headers)
+        if USE_PROXY:
+            s.proxies = PROXIES
+            s.verify = False
+        if getattr(self.args, 'ssl_skip', False):
+            s.verify = False
+        return s
+
+    _thread_local = threading.local()
+
+    def _get_thread_session(self):
+        if not hasattr(self._thread_local, "session"):
+            self._thread_local.session = self._make_thread_session()
+        return self._thread_local.session
 
     def _parallel_download(self, operation, items):
         loop = asyncio.new_event_loop()
@@ -1223,10 +1278,15 @@ class SafariBooks:
             try:
                 with open(os.path.join(self.css_path, css_file), 'r', errors='ignore') as f:
                     content = f.read()
-                for match in re.finditer(r'url\(([^)]*\.(?:otf|ttf|woff|woff2))\)', content):
-                    font_urls.add(match.group(1).strip('\'"'))
-            except Exception:
-                pass
+                for match in re.finditer(r"url\(['\"]?([^)]*\.(?:otf|ttf|woff|woff2))['\"]?\)", content):
+                    font_name = match.group(1).strip('\'"')
+                    if font_name.startswith("data:"):
+                        continue
+                    if font_name.startswith("http://") or font_name.startswith("https://"):
+                        continue
+                    font_urls.add(font_name)
+            except OSError as e:
+                self.display.log("Warning: could not read CSS file for fonts: %s" % e)
 
         if not font_urls:
             return
@@ -1246,6 +1306,8 @@ class SafariBooks:
             response = self.requests_provider(url, stream=True)
             if response == 0:
                 self.display.error("Error trying to retrieve font: %s" % font_name)
+            elif response.status_code != 200:
+                self.display.error("Error retrieving font %s: HTTP %d" % (font_name, response.status_code))
             else:
                 with open(font_path, 'wb') as f:
                     for chunk in response.iter_content(1024):
@@ -1531,11 +1593,16 @@ if __name__ == "__main__":
             sys.exit(1)
 
         session = requests.Session()
-        session.cookies.update(json.load(open(COOKIES_FILE)))
+        with open(COOKIES_FILE, "r", encoding="utf-8") as f:
+            session.cookies.update(json.load(f))
         session.headers.update(SafariBooks.HEADERS)
 
         collections_url = SAFARI_BASE_URL + "/api/v2/collections/"
-        response = session.get(collections_url)
+        try:
+            response = session.get(collections_url)
+        except (requests.ConnectionError, requests.ConnectTimeout, requests.RequestException) as e:
+            print("[#] Error: unable to reach O'Reilly API: %s" % e)
+            sys.exit(1)
         if response.status_code != 200:
             print("[#] Error: unable to retrieve playlists (status %d)." % response.status_code)
             sys.exit(1)

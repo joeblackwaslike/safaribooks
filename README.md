@@ -257,7 +257,7 @@ In this case, I suggest you to convert the `EPUB` to `AZW3` with Calibre or to `
     
         If you like it, please * this project on GitHub to make it known:
             https://github.com/lorenzodifuccia/safaribooks
-        e don’t forget to renew your Safari Books Online subscription:
+        And don’t forget to renew your Safari Books Online subscription:
             https://learning.oreilly.com
     
     [!] Bye!!

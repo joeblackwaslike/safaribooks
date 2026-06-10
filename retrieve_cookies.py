@@ -39,7 +39,8 @@ def _parse_auto(raw):
             return {
                 c["name"]: c.get("value", "")
                 for c in data
-                if not c.get("domain") or ".oreilly.com" in c.get("domain", "")
+                if isinstance(c, dict) and "name" in c
+                and (not c.get("domain") or ".oreilly.com" in c.get("domain", ""))
             }
     except (json.JSONDecodeError, ValueError, TypeError):
         pass
@@ -80,18 +81,32 @@ def from_browser(browser_name):
         "edge": browser_cookie3.edge,
         "chromium": browser_cookie3.chromium,
     }
-    cj = browsers[browser_name](domain_name=".oreilly.com")
+    try:
+        cj = browsers[browser_name](domain_name=".oreilly.com")
+    except Exception as e:
+        print("Error extracting cookies from %s: %s" % (browser_name, e))
+        print("Make sure the browser is closed and try again, or use paste mode instead.")
+        sys.exit(1)
     return {c.name: c.value for c in cj}
 
 
 def from_paste():
-    print("Paste cookies from your browser, then press Enter.")
+    print("Paste cookies from your browser, then press Enter on an empty line to finish.")
     print("  Accepted formats:")
     print("    - JSON from console:  %s" % BROWSER_JS.split("\n")[-1])
     print("    - Raw Cookie header:  Cookie: k1=v1; k2=v2")
     print("    - Extension export:   [{\"name\":\"k\",\"value\":\"v\",...}, ...]")
     print()
-    raw = input("> ").strip()
+    lines = []
+    while True:
+        try:
+            line = input("> " if not lines else "  ")
+        except EOFError:
+            break
+        if not line.strip():
+            break
+        lines.append(line)
+    raw = "\n".join(lines).strip()
     if not raw:
         print("Error: empty input.")
         sys.exit(1)
@@ -198,8 +213,13 @@ def main():
         if not os.path.isfile(args.output):
             print("No cookies file found at %s" % args.output)
             sys.exit(1)
-        with open(args.output) as f:
-            cookies = json.load(f)
+        try:
+            with open(args.output) as f:
+                cookies = json.load(f)
+        except json.JSONDecodeError as e:
+            print("Error: cookies file is corrupted: %s" % e)
+            print("Re-extract with: python retrieve_cookies.py")
+            sys.exit(1)
         is_valid, warnings = validate_cookies(cookies)
         for w in warnings:
             print("  WARNING: %s" % w)
