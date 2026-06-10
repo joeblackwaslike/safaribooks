@@ -144,7 +144,7 @@ class Display:
         if any(self.last_request):
             url, data, others, status, headers, body = self.last_request
             headers = re.sub(
-                r"(Cookie|Set-Cookie):\s*.+", r"\1: [REDACTED]", headers, flags=re.IGNORECASE
+                r"(Cookie|Set-Cookie):\s*[^\r\n]+", r"\1: [REDACTED]", headers, flags=re.IGNORECASE
             )
             self.log("Last request done:\n\tURL: {0}\n\tDATA: {1}\n\tOTHERS: {2}\n\n\t{3}\n{4}\n\n{5}\n"
                      .format(url, data, others, status, headers, body))
@@ -1192,6 +1192,10 @@ class SafariBooks:
                 response = session.get(urljoin(SAFARI_BASE_URL, url), stream=True)
             except (requests.ConnectionError, requests.ConnectTimeout, requests.RequestException) as e:
                 self.display.error("Error trying to retrieve this image: %s\n    From: %s\n    %s" % (image_name, url, e))
+                return
+
+            if response.status_code != 200:
+                self.display.error("Error retrieving image %s: HTTP %d" % (image_name, response.status_code))
                 return
 
             with open(image_path, 'wb') as img:

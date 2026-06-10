@@ -123,15 +123,15 @@ def _resize_image(self, image_path):
     if max_size == 0 and quality == 0:
         return
     try:
-        image = Image.open(image_path)
-        if max_size > 0:
-            image.thumbnail((max_size, max_size))
-        if quality > 0:
-            image.save(image_path, quality=quality)
-        else:
-            image.save(image_path)
-    except Exception:
-        pass  # skip unprocessable images (e.g. corrupt, unsupported format)
+        with Image.open(image_path) as image:
+            if max_size > 0:
+                image.thumbnail((max_size, max_size))
+            if quality > 0:
+                image.save(image_path, quality=quality)
+            else:
+                image.save(image_path)
+    except (OSError, ValueError) as e:
+        self.display.log("Warning: could not resize image %s: %s" % (image_path, e))
 ```
 
 #### 3d. Call `_resize_image()` in `_thread_download_images()` after writing the file (line 1082)
