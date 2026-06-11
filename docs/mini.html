@@ -1,0 +1,733 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>safaribooks - How It Works (Mini)</title>
+<style>
+/* ── Reset & Variables ─────────────────────────────────── */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+:root {
+  --bg: #080e1a; --bg1: #0f1a2e; --bg2: #162032; --bg3: #1c2940;
+  --border: #1e3452; --borderhi: #2d4d7a;
+  --text: #dde6f0; --muted: #7a9ab8; --dim: #3d5a78;
+  --sky: #38bdf8; --green: #4ade80; --orange: #fb923c;
+  --purple: #c084fc; --pink: #f472b6; --red: #f87171; --indigo: #818cf8;
+  --mono: 'SF Mono', 'JetBrains Mono', 'Fira Code', Consolas, monospace;
+}
+html { scroll-behavior: smooth; }
+body {
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  background: var(--bg); color: var(--text); line-height: 1.6;
+}
+
+/* ── CTA Banner ────────────────────────────────────────── */
+.cta-banner {
+  background: linear-gradient(135deg, var(--bg2), var(--bg3));
+  border-bottom: 1px solid var(--borderhi);
+  padding: 14px 24px; text-align: center;
+}
+.cta-banner a {
+  color: var(--sky); text-decoration: none; font-weight: 700;
+  font-size: 15px; letter-spacing: 0.3px;
+}
+.cta-banner a:hover { text-decoration: underline; }
+
+/* ── Sections ──────────────────────────────────────────── */
+section {
+  max-width: 960px; margin: 0 auto; padding: 48px 32px;
+  border-bottom: 1px solid var(--border);
+}
+section:last-of-type { border-bottom: none; }
+h1 { font-size: 36px; font-weight: 800; margin-bottom: 6px; }
+h2 {
+  font-size: 24px; font-weight: 700; margin-bottom: 20px;
+  display: flex; align-items: center; gap: 10px;
+}
+h2 .ico { font-size: 22px; }
+.subtitle { font-size: 16px; color: var(--muted); margin-bottom: 32px; }
+.desc { color: var(--muted); margin-bottom: 20px; font-size: 14px; max-width: 700px; }
+
+/* ── Hero Cards ────────────────────────────────────────── */
+.hero-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 24px; }
+.hero-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 24px;
+}
+.hero-card h3 { font-size: 15px; font-weight: 700; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+.hero-card p { font-size: 13px; color: var(--muted); line-height: 1.7; }
+.hero-card.problem h3 { color: var(--red); }
+.hero-card.solution h3 { color: var(--sky); }
+.hero-card.payoff h3 { color: var(--green); }
+
+/* ── Entity Cards ──────────────────────────────────────── */
+.entity-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 14px; }
+.entity-card {
+  background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 10px; padding: 18px; border-left: 3px solid var(--border);
+}
+.entity-card .e-header { display: flex; align-items: center; gap: 10px; margin-bottom: 8px; }
+.entity-card .e-icon { font-size: 20px; width: 32px; height: 32px; display: flex; align-items: center; justify-content: center; border-radius: 8px; flex-shrink: 0; }
+.entity-card .e-name { font-family: var(--mono); font-size: 13px; font-weight: 700; }
+.entity-card .e-module { font-family: var(--mono); font-size: 11px; color: var(--dim); }
+.entity-card .e-info { font-size: 12px; color: var(--muted); margin-top: 6px; line-height: 1.6; }
+
+/* ── Relationships ─────────────────────────────────────── */
+.rel-list { margin-top: 20px; padding: 16px; background: var(--bg2); border-radius: 8px; border: 1px solid var(--border); }
+.rel-list h4 { font-size: 13px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 0.8px; margin-bottom: 10px; }
+.rel-item { font-size: 13px; color: var(--muted); padding: 4px 0; font-family: var(--mono); }
+.rel-item .rel-edge { display: inline-block; min-width: 90px; font-size: 11px; font-weight: 700; }
+
+/* ── Pipeline Steps ────────────────────────────────────── */
+.step-list { list-style: none; counter-reset: step; }
+.step-list li {
+  display: flex; align-items: flex-start; gap: 14px;
+  padding: 10px 0; border-bottom: 1px solid var(--border);
+}
+.step-list li:last-child { border-bottom: none; }
+.step-num {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 12px; font-weight: 700;
+  background: var(--bg2); border: 1px solid var(--border); color: var(--sky);
+}
+.step-body { flex: 1; }
+.step-body .fn { font-family: var(--mono); font-size: 13px; font-weight: 600; color: var(--text); }
+.step-body .out { font-size: 12px; color: var(--dim); margin-left: 4px; }
+.step-body .detail { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.parallel-badge {
+  display: inline-block; padding: 2px 8px; border-radius: 4px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase;
+  letter-spacing: 0.5px; background: rgba(56,189,248,0.12);
+  color: var(--sky); border: 1px solid rgba(56,189,248,0.3);
+  margin-left: 8px;
+}
+.parallel-bracket {
+  border-left: 2px dashed var(--sky); margin-left: 14px;
+  padding-left: 12px; opacity: 0.7;
+}
+
+/* ── Auth Flow ─────────────────────────────────────────── */
+.auth-steps { list-style: none; }
+.auth-steps li {
+  display: flex; align-items: flex-start; gap: 12px;
+  padding: 8px 0; border-bottom: 1px solid var(--border);
+  font-size: 13px;
+}
+.auth-steps li:last-child { border-bottom: none; }
+.lane-badge {
+  flex-shrink: 0; font-family: var(--mono); font-size: 11px;
+  font-weight: 700; padding: 2px 8px; border-radius: 4px;
+  min-width: 100px; text-align: center;
+}
+.auth-arrow { color: var(--dim); flex-shrink: 0; font-size: 16px; }
+.auth-label { color: var(--muted); }
+.phase-label {
+  font-size: 11px; font-weight: 700; color: var(--muted);
+  text-transform: uppercase; letter-spacing: 1px;
+  padding: 12px 0 6px; border-bottom: 1px dashed var(--border);
+  margin-bottom: 4px;
+}
+
+/* ── State Diagram (CSS flexbox) ───────────────────────── */
+.state-diagram { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; margin-bottom: 20px; }
+.state-box {
+  padding: 10px 16px; border-radius: 10px; font-family: var(--mono);
+  font-size: 12px; font-weight: 700; background: var(--bg1);
+  border: 2px solid var(--border); text-align: center;
+}
+.state-arrow { color: var(--dim); font-size: 18px; flex-shrink: 0; }
+.state-label { font-size: 10px; color: var(--muted); display: block; margin-top: 2px; font-weight: 400; }
+
+/* ── Token Bucket Meter ────────────────────────────────── */
+.meter-wrap { margin-top: 16px; }
+.meter-label { font-size: 13px; font-weight: 600; margin-bottom: 6px; }
+.meter-bar {
+  height: 28px; background: var(--bg1); border: 1px solid var(--border);
+  border-radius: 6px; overflow: hidden; position: relative;
+}
+.meter-fill {
+  height: 100%; border-radius: 5px;
+  background: linear-gradient(90deg, var(--sky), #0ea5e9);
+}
+.meter-text {
+  position: absolute; top: 0; left: 0; right: 0; bottom: 0;
+  display: flex; align-items: center; justify-content: center;
+  font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--text);
+}
+.meter-details { font-size: 12px; color: var(--muted); margin-top: 8px; }
+.meter-details span { font-family: var(--mono); color: var(--sky); }
+
+/* ── Chapter Pipeline (horizontal) ─────────────────────── */
+.ch-pipe { display: flex; align-items: stretch; overflow-x: auto; gap: 0; padding: 16px 0; }
+.ch-stage {
+  flex: 1; min-width: 130px; background: var(--bg2);
+  border: 1px solid var(--border); padding: 18px 14px;
+  text-align: center; position: relative;
+}
+.ch-stage:first-child { border-radius: 8px 0 0 8px; }
+.ch-stage:last-child { border-radius: 0 8px 8px 0; }
+.ch-stage .s-icon { font-size: 22px; display: block; margin-bottom: 6px; }
+.ch-stage .s-name { font-family: var(--mono); font-size: 11px; font-weight: 700; color: var(--sky); display: block; margin-bottom: 4px; }
+.ch-stage .s-desc { font-size: 11px; color: var(--muted); line-height: 1.5; }
+.ch-stage + .ch-stage::before {
+  content: '\2192'; position: absolute; left: -14px; top: 50%;
+  transform: translateY(-50%); color: var(--dim); font-size: 18px; z-index: 1;
+}
+
+/* ── EPUB Tree ─────────────────────────────────────────── */
+.epub-tree, .epub-tree ul { list-style: none; padding-left: 0; }
+.epub-tree ul { padding-left: 24px; border-left: 1px solid var(--border); margin-left: 10px; }
+.epub-tree li { padding: 4px 0; }
+.epub-tree .node {
+  font-family: var(--mono); font-size: 13px; display: inline-flex;
+  align-items: center; gap: 6px;
+}
+.epub-tree .node-icon { font-size: 16px; }
+.epub-tree .node-name { color: var(--text); }
+.epub-tree .node-note { font-size: 11px; color: var(--dim); margin-left: 4px; }
+
+/* ── Details/Summary Accordion ─────────────────────────── */
+details { margin-bottom: 2px; }
+details > summary {
+  cursor: pointer; list-style: none; user-select: none;
+  padding: 12px 16px; background: var(--bg2); border: 1px solid var(--border);
+  border-radius: 8px; font-size: 15px; font-weight: 700;
+  display: flex; align-items: center; gap: 10px;
+}
+details > summary::-webkit-details-marker { display: none; }
+details > summary::before { content: '\25B6'; font-size: 10px; color: var(--dim); transition: transform 0.2s; }
+details[open] > summary::before { transform: rotate(90deg); }
+details[open] > summary { border-radius: 8px 8px 0 0; border-bottom-color: transparent; }
+details > .inner {
+  padding: 20px; background: var(--bg1); border: 1px solid var(--border);
+  border-top: none; border-radius: 0 0 8px 8px;
+}
+
+/* ── Responsive ────────────────────────────────────────── */
+@media (max-width: 700px) {
+  .hero-grid { grid-template-columns: 1fr; }
+  .entity-grid { grid-template-columns: 1fr; }
+  section { padding: 32px 16px; }
+  h1 { font-size: 28px; }
+  h2 { font-size: 20px; }
+  .ch-pipe { flex-direction: column; }
+  .ch-stage + .ch-stage::before { content: '\2193'; left: 50%; top: -14px; transform: translateX(-50%); }
+  .ch-stage:first-child, .ch-stage:last-child { border-radius: 8px; }
+  .ch-stage { border-radius: 8px; }
+  .state-diagram { flex-direction: column; }
+}
+
+/* ── Print ─────────────────────────────────────────────── */
+@media print {
+  :root { --bg: #fff; --bg1: #f8f8f8; --bg2: #f0f0f0; --bg3: #e8e8e8; --border: #ccc; --borderhi: #aaa; --text: #111; --muted: #555; --dim: #888; --sky: #0369a1; --green: #15803d; --red: #b91c1c; --orange: #c2410c; --purple: #7e22ce; --pink: #be185d; --indigo: #4338ca; }
+  body { background: #fff; color: #111; font-size: 11pt; }
+  .cta-banner { display: none; }
+  section { padding: 20px 0; break-inside: avoid; }
+  details { break-inside: avoid; }
+  details[open] > summary { background: #f0f0f0; }
+  .entity-card, .hero-card { border-color: #ccc; background: #f8f8f8; }
+  .state-box { background: #f8f8f8; border-color: #aaa; }
+  .meter-fill { background: #0369a1; }
+  .ch-stage { background: #f8f8f8; border-color: #ccc; }
+}
+</style>
+</head>
+<body>
+
+<!-- ════════════════════ CTA ════════════════════ -->
+<div class="cta-banner">
+  <a href="how-it-works.html">Full Interactive Visualization (D3.js) &rarr;</a>
+</div>
+
+<!-- ════════════════════ 1. HERO ════════════════════ -->
+<section id="top">
+  <h1>safaribooks</h1>
+  <p class="subtitle">Async O'Reilly book downloader &mdash; cookies, retries, rate limits, EPUB output</p>
+  <div class="hero-grid">
+    <div class="hero-card problem">
+      <h3>&#x26A0; The Problem</h3>
+      <p>O'Reilly killed programmatic login. The v1 API is dead. The upstream tool is abandoned. Your reading list is trapped behind a browser window.</p>
+    </div>
+    <div class="hero-card solution">
+      <h3>&#x26A1; The Solution</h3>
+      <p>Cookie-based async downloader with intelligent retries, rate limiting, and sequential asset fetching. Extracts cookies from your browser session, downloads every chapter, image, and stylesheet, and packages them into a valid EPUB.</p>
+    </div>
+    <div class="hero-card payoff">
+      <h3>&#x2714; The Payoff</h3>
+      <p>A complete, offline-readable EPUB in minutes. No more browser tabs. No more expired sessions killing downloads halfway through.</p>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 2. ARCHITECTURE ════════════════════ -->
+<section id="arch">
+  <h2><span class="ico">&#x25C9;</span> Architecture</h2>
+  <p class="desc">System entities and their roles. Each card shows the component, its module, and key details.</p>
+
+  <details open>
+    <summary>Entity Cards</summary>
+    <div class="inner">
+      <div class="entity-grid">
+        <div class="entity-card" style="border-left-color:#0ea5e9">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(14,165,233,0.12);color:#0ea5e9">&#x26A1;</div>
+            <div><div class="e-name" style="color:#0ea5e9">ApiClient</div><div class="e-module">core/api.py</div></div>
+          </div>
+          <div class="e-info">httpx.AsyncClient + tenacity retries + token bucket rate limiter. Base URL: learning.oreilly.com. 30s timeout.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#8b5cf6">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(139,92,246,0.12);color:#8b5cf6">&#x25CE;</div>
+            <div><div class="e-name" style="color:#8b5cf6">BookDownloader</div><div class="e-module">core/downloader.py</div></div>
+          </div>
+          <div class="e-info">Pipeline orchestrator. Entry point: safari fetch &lt;id&gt;. Coordinates all download stages via asyncio.gather.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#f59e0b">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(245,158,11,0.12);color:#f59e0b">&#x1F4D6;</div>
+            <div><div class="e-name" style="color:#f59e0b">BookInfo</div><div class="e-module">core/models.py</div></div>
+          </div>
+          <div class="e-info">title, isbn, authors, chapters[], cover_url, publishers. Fetched from /api/v2/epubs/ endpoint.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#10b981">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(16,185,129,0.12);color:#10b981">&sect;</div>
+            <div><div class="e-name" style="color:#10b981">Chapter</div><div class="e-module">core/models.py</div></div>
+          </div>
+          <div class="e-info">filename, title, content_url, images[], stylesheets[]. HTML rewritten to XHTML. Typically 15&ndash;40 per book.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#ef4444">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(239,68,68,0.12);color:#ef4444">&#x1F511;</div>
+            <div><div class="e-name" style="color:#ef4444">CookieSet</div><div class="e-module">core/models.py</div></div>
+          </div>
+          <div class="e-info">groot_sessionid, jwt, csrf_access_token, logged_in. Stored at ~/.config/safaribooks/cookies.json. Auto-refresh on 401/403.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#6366f1">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(99,102,241,0.12);color:#6366f1">&#x2699;</div>
+            <div><div class="e-name" style="color:#6366f1">AppConfig</div><div class="e-module">core/config.py</div></div>
+          </div>
+          <div class="e-info">pydantic-settings with SAFARI_ env prefix. Fields: output_dir, max_workers(4), image_max_width(0), kindle_mode(false).</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#f97316">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(249,115,22,0.12);color:#f97316">&#x23F1;</div>
+            <div><div class="e-name" style="color:#f97316">TokenBucketRateLimiter</div><div class="e-module">core/rate_limit.py</div></div>
+          </div>
+          <div class="e-info">Async-safe token bucket. 1.0 req/s default, 2 token burst. Continuous refill. asyncio.Lock prevents races.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#ec4899">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(236,72,153,0.12);color:#ec4899">&#x21BB;</div>
+            <div><div class="e-name" style="color:#ec4899">RetryConfig</div><div class="e-module">core/retry.py</div></div>
+          </div>
+          <div class="e-info">5 max attempts, 1s base delay, 2x exponential backoff, &plusmn;0.25 jitter, 60s cap. Retryable: 408, 429, 500, 502, 503, 504.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#14b8a6">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(20,184,166,0.12);color:#14b8a6">&#x1F4C1;</div>
+            <div><div class="e-name" style="color:#14b8a6">BookPaths</div><div class="e-module">core/epub.py</div></div>
+          </div>
+          <div class="e-info">OEBPS directory structure: root, Styles/, Images/, Video/. Base: output_dir/Book Title (isbn).</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#84cc16">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(132,204,22,0.12);color:#84cc16">&#x25C7;</div>
+            <div><div class="e-name" style="color:#84cc16">ParseResult</div><div class="e-module">core/chapters.py</div></div>
+          </div>
+          <div class="e-info">Per-chapter parse output: css_urls[], xhtml string, image_urls[], video_urls[], cover_url. Parser: lxml.html.</div>
+        </div>
+        <div class="entity-card" style="border-left-color:#a855f7">
+          <div class="e-header">
+            <div class="e-icon" style="background:rgba(168,85,247,0.12);color:#a855f7">&#x1F4E6;</div>
+            <div><div class="e-name" style="color:#a855f7">EPUB</div><div class="e-module">core/epub.py</div></div>
+          </div>
+          <div class="e-info">Final ZIP artifact. EPUB 2.0.1 spec. mimetype STORED first, everything else DEFLATED. Contains OPF, NCX, XHTML, CSS, fonts, images.</div>
+        </div>
+      </div>
+    </div>
+  </details>
+
+  <details>
+    <summary>Relationships</summary>
+    <div class="inner">
+      <div class="rel-list">
+        <h4>Entity Relationships</h4>
+        <div class="rel-item"><span class="rel-edge" style="color:#475569">uses &rarr;</span> BookDownloader &rarr; ApiClient</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#475569">uses &rarr;</span> ApiClient &rarr; TokenBucketRateLimiter</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#475569">uses &rarr;</span> ApiClient &rarr; RetryConfig</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#0ea5e9">fetches &rarr;</span> BookDownloader &rarr; BookInfo</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#0ea5e9">fetches &rarr;</span> BookDownloader &rarr; Chapter[]</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#10b981">produces &rarr;</span> BookDownloader &rarr; BookPaths</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#10b981">produces &rarr;</span> BookDownloader &rarr; EPUB</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#10b981">produces &rarr;</span> Chapter &rarr; ParseResult</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#ef4444">loads &rarr;</span> ApiClient &rarr; CookieSet</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#6366f1">configures &rarr;</span> AppConfig &rarr; BookDownloader</div>
+        <div class="rel-item"><span class="rel-edge" style="color:#6366f1">configures &rarr;</span> AppConfig &rarr; ApiClient</div>
+      </div>
+    </div>
+  </details>
+</section>
+
+<!-- ════════════════════ 3. PIPELINE ════════════════════ -->
+<section id="pipeline">
+  <h2><span class="ico">&#x25B6;</span> Download Pipeline</h2>
+  <p class="desc">The 14-step pipeline from authentication to final EPUB. Steps 7&ndash;10 run sequentially (CSS &rarr; fonts &rarr; images &rarr; videos).</p>
+
+  <ol class="step-list">
+    <li>
+      <div class="step-num">1</div>
+      <div class="step-body">
+        <span class="fn">check_login()</span><span class="out">&rarr; ApiClient</span>
+        <div class="detail">GET /profile/ &mdash; validates session cookies are active</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">2</div>
+      <div class="step-body">
+        <span class="fn">fetch_book_info()</span><span class="out">&rarr; BookInfo</span>
+        <div class="detail">GET /api/v2/epubs/urn:orm:book:{id}/ &mdash; title, isbn, chapters, cover</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">3</div>
+      <div class="step-body">
+        <span class="fn">enrich_metadata()</span><span class="out">&rarr; SearchAPI</span>
+        <div class="detail">GET /api/v2/search/ &mdash; enriches authors, publishers, description. Skips on error.</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">4</div>
+      <div class="step-body">
+        <span class="fn">ensure_book_dirs()</span><span class="out">&rarr; BookPaths</span>
+        <div class="detail">Creates OEBPS/, Styles/, Images/, Video/, META-INF/</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">5</div>
+      <div class="step-body">
+        <span class="fn">fetch_chapters()</span><span class="out">&rarr; Chapter[]</span>
+        <div class="detail">Resolves chapter list with content_urls. Typically 20&ndash;40 chapters.</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">6</div>
+      <div class="step-body">
+        <span class="fn">process_chapters()</span><span class="out">&rarr; ParseResult[]</span>
+        <div class="detail">For each chapter: fetch HTML &rarr; parse &rarr; rewrite links &rarr; write XHTML</div>
+      </div>
+    </li>
+  </ol>
+
+  <ol class="step-list">
+    <li>
+      <div class="step-num">7</div>
+      <div class="step-body">
+        <span class="fn">download_css()</span>
+        <div class="detail">Style00.css, Style01.css, ...</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">8</div>
+      <div class="step-body">
+        <span class="fn">download_fonts()</span>
+        <div class="detail">Scans CSS for @font-face urls. Formats: otf, woff2, ttf</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">9</div>
+      <div class="step-body">
+        <span class="fn">download_images()</span>
+        <div class="detail">jpg, png, gif, svg. Optional max_width resize.</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">10</div>
+      <div class="step-body">
+        <span class="fn">download_videos()</span>
+        <div class="detail">mp4 files. Optional &mdash; many books have none.</div>
+      </div>
+    </li>
+  </ol>
+
+  <ol class="step-list">
+    <li>
+      <div class="step-num">11</div>
+      <div class="step-body">
+        <span class="fn">render_content_opf()</span>
+        <div class="detail">Generates OEBPS/content.opf &mdash; manifest, spine, guide, dc:metadata</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">12</div>
+      <div class="step-body">
+        <span class="fn">render_toc_ncx()</span>
+        <div class="detail">Generates OEBPS/toc.ncx &mdash; NCX navMap from table-of-contents API</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">13</div>
+      <div class="step-body">
+        <span class="fn">build_epub()</span><span class="out">&rarr; EPUB</span>
+        <div class="detail">zipfile.ZipFile: mimetype STORED first, rest DEFLATED</div>
+      </div>
+    </li>
+    <li>
+      <div class="step-num">14</div>
+      <div class="step-body">
+        <span class="fn">copy_to_library()</span>
+        <div class="detail">Copy epub to library dir + save cookies snapshot</div>
+      </div>
+    </li>
+  </ol>
+</section>
+
+<!-- ════════════════════ 4. AUTH FLOW ════════════════════ -->
+<section id="auth">
+  <h2><span class="ico">&#x1F511;</span> Cookie Auth Flow</h2>
+  <p class="desc">Sequential swimlane flow showing cookie setup and runtime authentication.</p>
+
+  <div class="phase-label">Setup Flow</div>
+  <ol class="auth-steps">
+    <li>
+      <span class="lane-badge" style="background:rgba(245,158,11,0.12);color:#f59e0b">User</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-label">safari auth setup</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(239,68,68,0.12);color:#ef4444">CookieManager</span>
+      <span class="auth-label">auto-detect format (JSON, Netscape, browser-cookie3)</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(239,68,68,0.12);color:#ef4444">CookieManager</span>
+      <span class="auth-arrow">&#x21BB;</span>
+      <span class="lane-badge" style="background:rgba(239,68,68,0.12);color:#ef4444">CookieManager</span>
+      <span class="auth-label">validate cookies (groot_sessionid, jwt, csrf, logged_in)</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(239,68,68,0.12);color:#ef4444">CookieManager</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-label">save to ~/.config/safaribooks/cookies.json</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(245,158,11,0.12);color:#f59e0b">User</span>
+      <span class="auth-label">Auth configured!</span>
+    </li>
+  </ol>
+
+  <div class="phase-label">Runtime Flow</div>
+  <ol class="auth-steps">
+    <li>
+      <span class="lane-badge" style="background:rgba(245,158,11,0.12);color:#f59e0b">User</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-label">safari fetch 9781491958698</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(139,92,246,0.12);color:#8b5cf6">CLI</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(14,165,233,0.12);color:#0ea5e9">ApiClient</span>
+      <span class="auth-label">load cookies from disk</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(14,165,233,0.12);color:#0ea5e9">ApiClient</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(16,185,129,0.12);color:#10b981">O'Reilly</span>
+      <span class="auth-label">GET /profile/</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(16,185,129,0.12);color:#10b981">O'Reilly</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(14,165,233,0.12);color:#0ea5e9">ApiClient</span>
+      <span class="auth-label" style="color:var(--green)">200 OK &#x2713;</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(16,185,129,0.12);color:#10b981">O'Reilly</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(14,165,233,0.12);color:#0ea5e9">ApiClient</span>
+      <span class="auth-label" style="color:var(--red)">401/403 &#x2717; &mdash; triggers cookie refresh</span>
+    </li>
+    <li>
+      <span class="lane-badge" style="background:rgba(14,165,233,0.12);color:#0ea5e9">ApiClient</span>
+      <span class="auth-arrow">&rarr;</span>
+      <span class="lane-badge" style="background:rgba(239,68,68,0.12);color:#ef4444">CookieManager</span>
+      <span class="auth-label">_try_cookie_refresh() &mdash; reload cookies.json, retry</span>
+    </li>
+  </ol>
+</section>
+
+<!-- ════════════════════ 5. RETRY & RATE LIMIT ════════════════════ -->
+<section id="retry">
+  <h2><span class="ico">&#x21BB;</span> Retry &amp; Rate Limit</h2>
+  <p class="desc">State machine for retry logic and token bucket rate limiter.</p>
+
+  <details open>
+    <summary>Retry State Machine</summary>
+    <div class="inner">
+      <div class="state-diagram">
+        <div class="state-box" style="border-color:var(--sky);color:var(--sky)">ATTEMPT<span class="state-label">send request</span></div>
+        <div class="state-arrow">&xrarr;</div>
+        <div class="state-box" style="border-color:var(--green);color:var(--green)">SUCCESS<span class="state-label">2xx response</span></div>
+      </div>
+      <div class="state-diagram">
+        <div class="state-box" style="border-color:var(--sky);color:var(--sky)">ATTEMPT</div>
+        <div class="state-arrow" style="color:var(--orange)">&xrarr;</div>
+        <div class="state-box" style="border-color:var(--orange);color:var(--orange)">TRANSIENT_ERROR<span class="state-label">408,429,5xx</span></div>
+        <div class="state-arrow" style="color:var(--pink)">&xrarr;</div>
+        <div class="state-box" style="border-color:var(--pink);color:var(--pink)">BACKOFF<span class="state-label">1s &times; 2^n &plusmn; jitter</span></div>
+        <div class="state-arrow" style="color:var(--sky)">&xrarr;</div>
+        <div class="state-box" style="border-color:var(--sky);color:var(--sky)">ATTEMPT<span class="state-label">retry</span></div>
+      </div>
+      <div class="state-diagram">
+        <div class="state-box" style="border-color:var(--orange);color:var(--orange)">TRANSIENT_ERROR</div>
+        <div class="state-arrow" style="color:var(--red)">&xrarr;</div>
+        <div class="state-box" style="border-color:var(--red);color:var(--red)">PERMANENT_FAILURE<span class="state-label">attempts = 5 or non-retryable 4xx</span></div>
+      </div>
+      <div class="desc" style="margin-top:12px">Backoff formula: <code style="color:var(--pink)">base_delay(1s) &times; 2^attempt &times; (1 &plusmn; 0.25 jitter)</code>, capped at 60s. For 429/503 with Retry-After header: <code style="color:var(--pink)">header_value &times; 2.0</code>.</div>
+    </div>
+  </details>
+
+  <details open>
+    <summary>Token Bucket Rate Limiter</summary>
+    <div class="inner">
+      <div class="meter-wrap">
+        <div class="meter-label">Token Bucket</div>
+        <div class="meter-bar">
+          <div class="meter-fill" style="width:100%"></div>
+          <div class="meter-text">2 / 2 tokens</div>
+        </div>
+        <div class="meter-details">
+          Refill: <span>1.0 tokens/s</span> &nbsp;|&nbsp; Burst: <span>2 max</span> &nbsp;|&nbsp; Guard: <span>asyncio.Lock</span>
+        </div>
+      </div>
+      <div class="desc" style="margin-top:12px">Requests consume 1 token. If tokens = 0, callers await until refill. The async Lock prevents race conditions between concurrent coroutines.</div>
+    </div>
+  </details>
+</section>
+
+<!-- ════════════════════ 6. CHAPTER PROCESSING ════════════════════ -->
+<section id="chapters">
+  <h2><span class="ico">&sect;</span> Chapter Processing</h2>
+  <p class="desc">Each chapter flows through a six-stage transformation pipeline before being written as XHTML.</p>
+
+  <div class="ch-pipe">
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F310;</span>
+      <span class="s-name">fetch_html</span>
+      <span class="s-desc">GET chapter content_url from O'Reilly CDN. Returns raw HTML.</span>
+    </div>
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F333;</span>
+      <span class="s-name">lxml_parse</span>
+      <span class="s-desc">Parse HTML with lxml.html. Build element tree for traversal.</span>
+    </div>
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F50D;</span>
+      <span class="s-name">extract_assets</span>
+      <span class="s-desc">Walk tree for &lt;img&gt;, &lt;link&gt;, &lt;video&gt; URLs. Collect CSS, images, videos.</span>
+    </div>
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F517;</span>
+      <span class="s-name">rewrite_links</span>
+      <span class="s-desc">Replace absolute CDN URLs with relative EPUB paths (Images/, Styles/).</span>
+    </div>
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F5BC;</span>
+      <span class="s-name">detect_cover</span>
+      <span class="s-desc">First chapter, first &lt;img&gt; &mdash; extract as default_cover.jpeg if no metadata cover.</span>
+    </div>
+    <div class="ch-stage">
+      <span class="s-icon">&#x1F4C4;</span>
+      <span class="s-name">serialize_xhtml</span>
+      <span class="s-desc">lxml.html.tostring() with XHTML doctype. Write OEBPS/{filename}.xhtml.</span>
+    </div>
+  </div>
+</section>
+
+<!-- ════════════════════ 7. EPUB STRUCTURE ════════════════════ -->
+<section id="epub">
+  <h2><span class="ico">&#x1F4E6;</span> EPUB Assembly</h2>
+  <p class="desc">ZIP tree structure of the final EPUB artifact (EPUB 2.0.1 spec).</p>
+
+  <ul class="epub-tree">
+    <li>
+      <details open>
+        <summary><span class="node"><span class="node-icon">&#x1F4E6;</span><span class="node-name">book.epub</span><span class="node-note">ZIP &mdash; EPUB 2.0.1</span></span></summary>
+        <div class="inner">
+          <ul class="epub-tree">
+            <li><span class="node"><span class="node-icon">&#x2699;</span><span class="node-name">mimetype</span><span class="node-note">application/epub+zip (STORED, first entry)</span></span></li>
+            <li>
+              <details>
+                <summary><span class="node"><span class="node-icon">&#x1F4C1;</span><span class="node-name">META-INF/</span></span></summary>
+                <div class="inner">
+                  <ul class="epub-tree">
+                    <li><span class="node"><span class="node-icon">&#x2699;</span><span class="node-name">container.xml</span><span class="node-note">points to OEBPS/content.opf</span></span></li>
+                  </ul>
+                </div>
+              </details>
+            </li>
+            <li>
+              <details open>
+                <summary><span class="node"><span class="node-icon">&#x1F4C1;</span><span class="node-name">OEBPS/</span><span class="node-note">all book content</span></span></summary>
+                <div class="inner">
+                  <ul class="epub-tree">
+                    <li><span class="node"><span class="node-icon">&#x1F4E6;</span><span class="node-name">content.opf</span><span class="node-note">manifest, spine, guide, dc:metadata</span></span></li>
+                    <li><span class="node"><span class="node-icon">&#x1F4E6;</span><span class="node-name">toc.ncx</span><span class="node-note">NCX navMap with navPoints</span></span></li>
+                    <li><span class="node"><span class="node-icon">&sect;</span><span class="node-name">ch001.xhtml</span><span class="node-note">chapter content (HTML &rarr; XHTML)</span></span></li>
+                    <li><span class="node"><span class="node-icon">&sect;</span><span class="node-name">ch002.xhtml</span></span></li>
+                    <li><span class="node"><span class="node-icon">&sect;</span><span class="node-name">...more chapters</span><span class="node-note">15&ndash;40 per book</span></span></li>
+                    <li>
+                      <details>
+                        <summary><span class="node"><span class="node-icon">&#x1F4C1;</span><span class="node-name">Styles/</span><span class="node-note">CSS + fonts</span></span></summary>
+                        <div class="inner">
+                          <ul class="epub-tree">
+                            <li><span class="node"><span class="node-icon">&#x25C7;</span><span class="node-name">Style00.css</span></span></li>
+                            <li><span class="node"><span class="node-icon">&#x25C7;</span><span class="node-name">Style01.css</span></span></li>
+                            <li><span class="node"><span class="node-icon">&#x25C7;</span><span class="node-name">NotoSerif.otf</span><span class="node-note">@font-face</span></span></li>
+                          </ul>
+                        </div>
+                      </details>
+                    </li>
+                    <li>
+                      <details>
+                        <summary><span class="node"><span class="node-icon">&#x1F4C1;</span><span class="node-name">Images/</span><span class="node-note">cover + figures</span></span></summary>
+                        <div class="inner">
+                          <ul class="epub-tree">
+                            <li><span class="node"><span class="node-icon">&#x1F4D6;</span><span class="node-name">default_cover.jpeg</span><span class="node-note">EPUB cover image</span></span></li>
+                            <li><span class="node"><span class="node-icon">&#x25C7;</span><span class="node-name">figure_01_01.png</span></span></li>
+                            <li><span class="node"><span class="node-icon">&#x25C7;</span><span class="node-name">...more images</span></span></li>
+                          </ul>
+                        </div>
+                      </details>
+                    </li>
+                    <li>
+                      <details>
+                        <summary><span class="node"><span class="node-icon">&#x1F4C1;</span><span class="node-name">Video/</span><span class="node-note">optional</span></span></summary>
+                        <div class="inner">
+                          <ul class="epub-tree">
+                            <li><span class="node"><span class="node-icon">&#x25CE;</span><span class="node-name">video_01.mp4</span><span class="node-note">many books have none</span></span></li>
+                          </ul>
+                        </div>
+                      </details>
+                    </li>
+                  </ul>
+                </div>
+              </details>
+            </li>
+          </ul>
+        </div>
+      </details>
+    </li>
+  </ul>
+</section>
+
+</body>
+</html>
