@@ -1,5 +1,5 @@
-import json
 import argparse
+import json
 import os
 import re
 import stat
@@ -95,7 +95,7 @@ def from_paste():
     print("  Accepted formats:")
     print("    - JSON from console:  %s" % BROWSER_JS.split("\n")[-1])
     print("    - Raw Cookie header:  Cookie: k1=v1; k2=v2")
-    print("    - Extension export:   [{\"name\":\"k\",\"value\":\"v\",...}, ...]")
+    print('    - Extension export:   [{"name":"k","value":"v",...}, ...]')
     print()
     lines = []
     while True:
