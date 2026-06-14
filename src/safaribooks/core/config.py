@@ -23,7 +23,6 @@ class AppConfig(BaseSettings):
     library_dir: Path = Field(
         default_factory=lambda: Path.home() / ".safaribooks",
     )
-    kindle: bool = False
     preserve_log: bool = False
     image_max_size: int = Field(
         default=0,
@@ -42,4 +41,12 @@ class AppConfig(BaseSettings):
     rate_burst: int = Field(
         default=2,
         description="Token bucket burst capacity.",
+    )
+    auto_refresh_browser: str | None = Field(
+        default=None,
+        description="Browser to auto-extract cookies from on session expiry (chrome/firefox/edge/chromium). None=disabled.",
+    )
+    keepalive_interval: int = Field(
+        default=300,
+        description="Seconds between session keepalive pings during downloads (0=disabled).",
     )

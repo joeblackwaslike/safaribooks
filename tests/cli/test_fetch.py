@@ -22,7 +22,6 @@ class TestFetchHelp:
         assert "book-ids" in result.output.lower() or "BOOK_IDS" in result.output
         assert "--playlist" in result.output
         assert "--file" in result.output
-        assert "--kindle" in result.output
         assert "--output" in result.output
         assert "--image-max-size" in result.output
         assert "--image-quality" in result.output
@@ -364,21 +363,6 @@ class TestFetchDownloadFailure:
 
 class TestFetchCLIOptions:
     """Verify that CLI options are forwarded to AppConfig correctly."""
-
-    @patch("safaribooks.cli.fetch.BookDownloader")
-    def test_kindle_option(self, mock_downloader_cls: MagicMock, tmp_path: Path):
-        mock_instance = MagicMock()
-        mock_instance.run = AsyncMock(return_value=tmp_path / "book.epub")
-        mock_downloader_cls.return_value = mock_instance
-
-        result = runner.invoke(
-            app,
-            ["fetch", "9781234567890", "--kindle", "--output", str(tmp_path)],
-        )
-        assert result.exit_code == 0
-
-        config = mock_downloader_cls.call_args[0][0]
-        assert config.kindle is True
 
     @patch("safaribooks.cli.fetch.BookDownloader")
     def test_image_options(self, mock_downloader_cls: MagicMock, tmp_path: Path):

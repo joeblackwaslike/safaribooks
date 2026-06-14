@@ -4,6 +4,7 @@
 import logging
 import re
 import shutil
+import tempfile
 from collections.abc import Callable
 from pathlib import Path
 
@@ -95,6 +96,7 @@ class BookDownloader:
             # 1. Authenticate
             logger.info("Checking authentication...")
             await client.check_login()
+            await client.start_keepalive()
 
             # 2. Fetch book info
             logger.info("Retrieving book info for %s...", self.book_id)
@@ -105,99 +107,109 @@ class BookDownloader:
             logger.info("Enriching book metadata...")
             book_info = await enrich_book_metadata(client, self.book_id, book_info)
 
-            # 4. Create output directories
-            dirname = sanitize_dirname(f"{book_info.title} ({self.book_id})")
-            book_paths = ensure_book_dirs(self.config.output_dir, dirname)
-            logger.info("Output directory: %s", book_paths.book_dir)
+            # 4. Compute final EPUB path and set up build directory
+            self.config.output_dir.mkdir(parents=True, exist_ok=True)
+            epub_filename = sanitize_dirname(book_info.title) + ".epub"
+            epub_output_path = self.config.output_dir / epub_filename
 
-            # 5. Fetch chapter list
-            logger.info("Retrieving book chapters...")
-            chapters = await fetch_chapters(client, self.book_id)
-            logger.info("Found %d chapters.", len(chapters))
+            with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
+                book_paths = ensure_book_dirs(Path(tmp_dir))
+                logger.info("Build directory: %s", book_paths.book_dir)
 
-            # 6. Process each chapter: fetch HTML, parse, collect assets, write XHTML
-            all_css, all_images, all_videos, cover_src = await self._process_chapters(
-                client, chapters, book_paths
-            )
+                # 5. Fetch chapter list
+                logger.info("Retrieving book chapters...")
+                chapters = await fetch_chapters(client, self.book_id)
+                logger.info("Found %d chapters.", len(chapters))
 
-            # 7a. Default cover if none was found during chapter parsing
-            if not cover_src:
-                has_cover_chapter = any(
-                    "cover" in ch.filename.lower() or "cover" in ch.title.lower() for ch in chapters
+                # 6. Process each chapter: fetch HTML, parse, collect assets, write XHTML
+                all_css, all_images, all_videos, cover_src = await self._process_chapters(
+                    client, chapters, book_paths
                 )
-                if not has_cover_chapter and book_info.cover:
-                    cover_filename = await fetch_default_cover(client, book_info, book_paths.images)
-                    if cover_filename:
-                        cover_src = f"Images/{cover_filename}"
-                        logger.info("Downloaded default cover: %s", cover_filename)
 
-            # 7b. Download CSS
-            logger.info("Downloading CSS... (%d files)", len(all_css))
-            await download_css(
-                client,
-                all_css,
-                book_paths.styles,
-                self.book_id,
-                progress_callback=self._make_asset_callback("css"),
-            )
+                # 7a. Default cover if none was found during chapter parsing
+                if not cover_src:
+                    has_cover_chapter = any(
+                        "cover" in ch.filename.lower() or "cover" in ch.title.lower()
+                        for ch in chapters
+                    )
+                    if not has_cover_chapter and book_info.cover:
+                        cover_filename = await fetch_default_cover(
+                            client, book_info, book_paths.images
+                        )
+                        if cover_filename:
+                            cover_src = f"Images/{cover_filename}"
+                            logger.info("Downloaded default cover: %s", cover_filename)
 
-            # 7c. Download fonts (scans downloaded CSS for @font-face references)
-            logger.info("Downloading fonts...")
-            font_files = await download_fonts(
-                client,
-                book_paths.styles,
-                self.book_id,
-                progress_callback=self._make_asset_callback("fonts"),
-            )
-
-            # 7d. Download images
-            logger.info("Downloading images... (%d files)", len(all_images))
-            await download_images(
-                client,
-                all_images,
-                book_paths.images,
-                self.book_id,
-                max_size=self.config.image_max_size,
-                quality=self.config.image_quality,
-                progress_callback=self._make_asset_callback("images"),
-            )
-
-            # 7e. Download videos
-            if all_videos:
-                logger.info("Downloading videos... (%d files)", len(all_videos))
-                await download_videos(
+                # 7b. Download CSS
+                logger.info("Downloading CSS... (%d files)", len(all_css))
+                await download_css(
                     client,
-                    all_videos,
-                    book_paths.videos,
-                    progress_callback=self._make_asset_callback("videos"),
+                    all_css,
+                    book_paths.styles,
+                    self.book_id,
+                    progress_callback=self._make_asset_callback("css"),
                 )
 
-            # 8. Generate content.opf and toc.ncx
-            logger.info("Generating EPUB metadata...")
-            content_opf = render_content_opf(
-                book_info,
-                chapters,
-                book_paths.styles,
-                book_paths.images,
-                book_paths.videos,
-                font_files,
-                cover_src=cover_src,
-            )
-            (book_paths.oebps / "content.opf").write_bytes(
-                content_opf.encode("utf-8", "xmlcharrefreplace")
-            )
+                # 7c. Download fonts (scans downloaded CSS for @font-face references)
+                logger.info("Downloading fonts...")
+                font_files = await download_fonts(
+                    client,
+                    book_paths.styles,
+                    self.book_id,
+                    progress_callback=self._make_asset_callback("fonts"),
+                )
 
-            toc_url = (
-                f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{self.book_id}/table-of-contents/"
-            )
-            toc_ncx = await render_toc_ncx(client, toc_url, book_info)
-            (book_paths.oebps / "toc.ncx").write_bytes(toc_ncx.encode("utf-8", "xmlcharrefreplace"))
+                # 7d. Download images
+                logger.info("Downloading images... (%d files)", len(all_images))
+                await download_images(
+                    client,
+                    all_images,
+                    book_paths.images,
+                    self.book_id,
+                    max_size=self.config.image_max_size,
+                    quality=self.config.image_quality,
+                    progress_callback=self._make_asset_callback("images"),
+                )
 
-            # 9. Build EPUB
-            logger.info("Creating EPUB file...")
-            self._notify_progress("epub", 0, 1)
-            epub_path = build_epub(book_paths, book_info.title)
-            self._notify_progress("epub", 1, 1)
+                # 7e. Download videos
+                if all_videos:
+                    logger.info("Downloading videos... (%d files)", len(all_videos))
+                    await download_videos(
+                        client,
+                        all_videos,
+                        book_paths.videos,
+                        progress_callback=self._make_asset_callback("videos"),
+                    )
+
+                # 8. Generate content.opf and toc.ncx
+                logger.info("Generating EPUB metadata...")
+                content_opf = render_content_opf(
+                    book_info,
+                    chapters,
+                    book_paths.styles,
+                    book_paths.images,
+                    book_paths.videos,
+                    font_files,
+                    cover_src=cover_src,
+                )
+                (book_paths.oebps / "content.opf").write_bytes(
+                    content_opf.encode("utf-8", "xmlcharrefreplace")
+                )
+
+                toc_url = (
+                    f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{self.book_id}"
+                    f"/table-of-contents/"
+                )
+                toc_ncx = await render_toc_ncx(client, toc_url, book_info)
+                (book_paths.oebps / "toc.ncx").write_bytes(
+                    toc_ncx.encode("utf-8", "xmlcharrefreplace")
+                )
+
+                # 9. Build EPUB
+                logger.info("Creating EPUB file...")
+                self._notify_progress("epub", 0, 1)
+                epub_path = build_epub(book_paths, epub_output_path)
+                self._notify_progress("epub", 1, 1)
 
             # 10. Copy EPUB to central library
             epubs_dir = self.config.library_dir / "epubs"
@@ -205,7 +217,8 @@ class BookDownloader:
             shutil.copy2(epub_path, epubs_dir / epub_path.name)
             logger.info("Copied EPUB to library: %s", epubs_dir / epub_path.name)
 
-            # Save cookies to persist any refreshed tokens
+            # Stop keepalive and save cookies to persist any refreshed tokens
+            await client.stop_keepalive()
             client.save_cookies()
 
             logger.info("Done! EPUB saved to: %s", epub_path)
@@ -286,7 +299,6 @@ class BookDownloader:
                 dest_path,
                 result.page_css,
                 result.body_xhtml,
-                kindle=self.config.kindle,
             )
 
             self._notify_progress("chapters", idx + 1, total)

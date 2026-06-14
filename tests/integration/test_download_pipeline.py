@@ -321,36 +321,28 @@ class TestFullDownloadPipeline:
         pipeline_config: AppConfig,
         tmp_path: Path,
     ):
-        """Verify the intermediate EPUB directory structure is created correctly."""
+        """Verify the EPUB is saved directly in the output directory with a clean name."""
         base = "https://learning.oreilly.com"
         _register_routes(base, BOOK_ID)
 
         downloader = BookDownloader(pipeline_config, BOOK_ID)
-        await downloader.run()
+        epub_path = await downloader.run()
 
-        # Verify the intermediate directory structure
         books_dir = tmp_path / "Books"
         assert books_dir.is_dir()
 
-        # Find the book directory (sanitized title)
-        book_dirs = list(books_dir.iterdir())
-        assert len(book_dirs) == 1
-        book_dir = book_dirs[0]
+        # EPUB should be directly in Books/, not in a subdirectory
+        epub_files = list(books_dir.glob("*.epub"))
+        assert len(epub_files) == 1
+        epub_file = epub_files[0]
 
-        assert (book_dir / "OEBPS").is_dir()
-        assert (book_dir / "OEBPS" / "Styles").is_dir()
-        assert (book_dir / "OEBPS" / "Images").is_dir()
-        assert (book_dir / "META-INF").is_dir()
+        assert epub_file.name == "Python Testing with pytest.epub"
+        assert BOOK_ID not in epub_file.name
+        assert epub_file == epub_path
 
-        # content.opf should be on disk
-        content_opf_path = book_dir / "OEBPS" / "content.opf"
-        assert content_opf_path.is_file()
-        content = content_opf_path.read_text(encoding="utf-8")
-        assert "Python Testing with pytest" in content
-
-        # toc.ncx should be on disk
-        toc_ncx_path = book_dir / "OEBPS" / "toc.ncx"
-        assert toc_ncx_path.is_file()
+        # No per-book subdirectory should remain
+        subdirs = [p for p in books_dir.iterdir() if p.is_dir()]
+        assert len(subdirs) == 0
 
     @respx.mock
     async def test_pipeline_enriches_metadata(

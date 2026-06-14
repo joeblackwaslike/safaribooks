@@ -17,7 +17,7 @@ from safaribooks.core.constants import (
     BASE_02_HTML,
     CONTAINER_XML,
     CONTENT_OPF,
-    KINDLE_HTML,
+    EREADER_CSS,
     TOC_NCX,
 )
 from safaribooks.core.exceptions import ApiError, DownloadError
@@ -87,14 +87,14 @@ def sanitize_dirname(name: str, *, clean_space: bool = False) -> str:
     return name
 
 
-def ensure_book_dirs(output_dir: Path, dirname: str) -> BookPaths:
-    """Create the standard EPUB directory tree under *output_dir*.
+def ensure_book_dirs(build_dir: Path) -> BookPaths:
+    """Create the standard EPUB directory tree under *build_dir*.
 
     The tree looks like::
 
-        <output_dir>/<dirname>/
+        <build_dir>/
             OEBPS/
-                Text/          (not used by legacy, kept for completeness)
+                Text/
                 Styles/
                 Images/
                 Video/
@@ -102,10 +102,8 @@ def ensure_book_dirs(output_dir: Path, dirname: str) -> BookPaths:
 
     Parameters
     ----------
-    output_dir:
-        Parent output directory (e.g. ``Books/``).
-    dirname:
-        Sanitized directory name for this book.
+    build_dir:
+        Root staging directory for this book's build artifacts.
 
     Returns:
     -------
@@ -113,7 +111,7 @@ def ensure_book_dirs(output_dir: Path, dirname: str) -> BookPaths:
         Resolved paths to every subdirectory.
 
     """
-    book_dir = output_dir / dirname
+    book_dir = build_dir
     oebps = book_dir / "OEBPS"
     text = oebps / "Text"
     styles = oebps / "Styles"
@@ -147,13 +145,11 @@ def write_chapter_html(
     path: Path,
     css_content: str,
     body_content: str,
-    *,
-    kindle: bool = False,
 ) -> None:
     """Write a single chapter XHTML file.
 
     Wraps the CSS and body content in the standard EPUB XHTML template
-    (``BASE_01_HTML`` + optional ``KINDLE_HTML`` + ``BASE_02_HTML``).
+    (``BASE_01_HTML`` + ``EREADER_CSS`` + ``BASE_02_HTML``).
 
     Parameters
     ----------
@@ -163,14 +159,9 @@ def write_chapter_html(
         CSS ``<link>`` tags and/or inline ``<style>`` blocks.
     body_content:
         The XHTML body fragment.
-    kindle:
-        If ``True``, include Kindle-specific CSS overrides.
 
     """
-    template = BASE_01_HTML
-    if kindle:
-        template += KINDLE_HTML
-    template += BASE_02_HTML
+    template = BASE_01_HTML + EREADER_CSS + BASE_02_HTML
 
     html = template.format(css_content, body_content)
     path.write_bytes(html.encode("utf-8", "xmlcharrefreplace"))
@@ -490,7 +481,7 @@ async def render_toc_ncx(
 # ---------------------------------------------------------------------------
 
 
-def build_epub(book_paths: BookPaths, book_title: str) -> Path:
+def build_epub(book_paths: BookPaths, epub_output_path: Path) -> Path:
     """Package the book directory into a valid EPUB (ZIP) file.
 
     Per the EPUB specification, the ``mimetype`` file must be the first
@@ -500,8 +491,8 @@ def build_epub(book_paths: BookPaths, book_title: str) -> Path:
     ----------
     book_paths:
         Resolved paths to the book directory tree.
-    book_title:
-        Book title used to derive the output filename.
+    epub_output_path:
+        Full path where the EPUB file will be written.
 
     Returns:
     -------
@@ -524,9 +515,7 @@ def build_epub(book_paths: BookPaths, book_title: str) -> Path:
     container_path = book_paths.meta_inf / "container.xml"
     container_path.write_bytes(CONTAINER_XML.encode("utf-8", "xmlcharrefreplace"))
 
-    # Determine output path.
-    epub_name = sanitize_dirname(book_title, clean_space=True) + ".epub"
-    epub_path = book_dir / epub_name
+    epub_path = epub_output_path
 
     # Remove old epub if it exists.
     if epub_path.exists():

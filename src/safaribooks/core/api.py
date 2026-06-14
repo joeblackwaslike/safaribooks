@@ -1,6 +1,8 @@
 """Async HTTP client for the O'Reilly Learning API."""
 
 
+import asyncio
+import contextlib
 import json
 import logging
 import re
@@ -10,6 +12,7 @@ from typing import Any
 
 import httpx
 
+from safaribooks.core import cookies as cookie_mod
 from safaribooks.core.config import AppConfig
 from safaribooks.core.constants import (
     HEADERS,
@@ -45,6 +48,7 @@ class ApiClient:
         self._cookie_dict = self._load_cookies()
         self._client: httpx.AsyncClient | None = None
         self._cookie_refresh_attempted = False
+        self._keepalive_task: asyncio.Task[None] | None = None
         self._rate_limiter = TokenBucketRateLimiter(
             rate=config.rate_limit,
             burst=config.rate_burst,
@@ -67,7 +71,8 @@ class ApiClient:
         exc_val: BaseException | None,
         exc_tb: Any,
     ) -> None:
-        """Close the underlying async HTTP client."""
+        """Stop keepalive and close the underlying async HTTP client."""
+        await self.stop_keepalive()
         if self._client is not None:
             await self._client.aclose()
             self._client = None
@@ -254,8 +259,10 @@ class ApiClient:
         """Update client cookies from ``Set-Cookie`` response headers.
 
         Handles the O'Reilly API quirk where ``max-age`` values can be
-        floats, which the standard cookie parser rejects.
+        floats, which the standard cookie parser rejects.  Persists to
+        disk when cookies change so refreshed values survive crashes.
         """
+        before = dict(self.client.cookies)
         for morsel in set_cookie_headers:
             if _COOKIE_FLOAT_MAX_AGE_RE.search(morsel):
                 try:
@@ -264,9 +271,11 @@ class ApiClient:
                     self.client.cookies.set(key.strip(), value.strip())
                 except ValueError:
                     logger.debug("Malformed Set-Cookie morsel: %s", morsel)
+        if dict(self.client.cookies) != before:
+            self.save_cookies()
 
     def _try_cookie_refresh(self) -> bool:
-        """Try to reload cookies from disk if the session has expired.
+        """Try to reload cookies from disk, then browser, if the session has expired.
 
         Returns ``True`` if fresh cookies were loaded successfully.
         Raises :class:`AuthenticationError` if refresh is not possible.
@@ -280,6 +289,8 @@ class ApiClient:
 
         cookies_path = self.config.cookies_file
         if not cookies_path.is_file():
+            if self._try_browser_refresh():
+                return True
             raise AuthenticationError(
                 f"Session expired and cookie file not found: {cookies_path}\n"
                 "Re-extract cookies with: safaribooks retrieve-cookies"
@@ -301,10 +312,72 @@ class ApiClient:
             logger.info("Reloaded cookies from disk.")
             return True
 
+        if self._try_browser_refresh():
+            return True
+
         raise AuthenticationError(
             "Session expired. Cookies on disk are identical to the expired session.\n"
             "Re-extract cookies with: safaribooks retrieve-cookies"
         )
+
+    def _try_browser_refresh(self) -> bool:
+        """Try to re-extract cookies from the browser.
+
+        Returns ``True`` if fresh cookies were loaded and differ from
+        the current session.  Returns ``False`` when auto-refresh is
+        disabled or extraction fails.
+        """
+        browser = self.config.auto_refresh_browser
+        if not browser:
+            return False
+
+        try:
+            cookie_set = cookie_mod.from_browser(browser)
+        except (CookieError, Exception) as exc:
+            logger.warning("Auto-refresh from %s failed: %s", browser, exc)
+            return False
+
+        fresh = cookie_set.cookies
+        if fresh == dict(self.client.cookies):
+            return False
+
+        self.client.cookies.update(fresh)
+        self.save_cookies()
+        logger.info("Auto-refreshed cookies from %s.", browser)
+        return True
+
+    # ------------------------------------------------------------------
+    # Session keepalive
+    # ------------------------------------------------------------------
+
+    async def start_keepalive(self) -> None:
+        """Start a background task that pings the profile endpoint periodically."""
+        interval = self.config.keepalive_interval
+        if interval <= 0:
+            return
+        self._keepalive_task = asyncio.create_task(self._keepalive_loop(interval))
+        logger.debug("Session keepalive started (every %ds).", interval)
+
+    async def stop_keepalive(self) -> None:
+        """Cancel the keepalive background task if running."""
+        task = self._keepalive_task
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            logger.debug("Session keepalive stopped.")
+
+    async def _keepalive_loop(self, interval: int) -> None:
+        """Periodically hit the profile endpoint to extend the session."""
+        while True:
+            await asyncio.sleep(interval)
+            try:
+                await self.get(PROFILE_URL, update_cookies=True)
+                logger.debug("Keepalive ping OK.")
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                logger.debug("Keepalive ping failed: %s", exc)
 
     # ------------------------------------------------------------------
     # JSON response parsing

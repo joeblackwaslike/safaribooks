@@ -92,10 +92,6 @@ def fetch_cmd(
         Path | None,
         typer.Option("--file", "-f", help="File with book IDs, one per line."),
     ] = None,
-    kindle: Annotated[
-        bool,
-        typer.Option("--kindle", help="Add Kindle-compatible CSS."),
-    ] = False,
     output_dir: Annotated[
         Path | None,
         typer.Option("--output", "-o", help="Output directory."),
@@ -139,7 +135,6 @@ def fetch_cmd(
 
     # Build AppConfig from CLI options
     config_kwargs: dict[str, object] = {
-        "kindle": kindle,
         "image_max_size": image_max_size,
         "image_quality": image_quality,
         "ssl_skip": ssl_skip,

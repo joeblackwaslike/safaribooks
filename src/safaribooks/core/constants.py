@@ -50,6 +50,11 @@ REQUIRED_COOKIES: frozenset[str] = frozenset({
     "logged_in",
 })
 
+REFRESH_COOKIES: frozenset[str] = frozenset({
+    "orm-jwt",
+    "orm-rt",
+})
+
 BROWSER_JS: str = (
     "// Run this in your browser console on https://learning.oreilly.com:\n"
     "JSON.stringify(document.cookie.split(';').reduce((o,c) => "
@@ -75,7 +80,7 @@ BASE_01_HTML = (
     "#sbo-rt-content .bq{{margin-right:1em!important;}}"
 )
 
-KINDLE_HTML = (
+EREADER_CSS = (
     "#sbo-rt-content *{{word-wrap:break-word!important;"
     "word-break:break-word!important;}}"
     "#sbo-rt-content table,#sbo-rt-content pre"

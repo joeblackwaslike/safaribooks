@@ -11,10 +11,6 @@ class TestAppConfigDefaults:
         config = AppConfig()
         assert config.output_dir == Path("Books")
 
-    def test_default_kindle_false(self):
-        config = AppConfig()
-        assert config.kindle is False
-
     def test_default_image_settings(self):
         config = AppConfig()
         assert config.image_max_size == 0
@@ -55,11 +51,6 @@ class TestAppConfigFromEnv:
         monkeypatch.setenv("SAFARI_OUTPUT_DIR", "/tmp/mybooks")
         config = AppConfig()
         assert config.output_dir == Path("/tmp/mybooks")
-
-    def test_kindle_from_env(self, monkeypatch):
-        monkeypatch.setenv("SAFARI_KINDLE", "true")
-        config = AppConfig()
-        assert config.kindle is True
 
     def test_image_max_size_from_env(self, monkeypatch):
         monkeypatch.setenv("SAFARI_IMAGE_MAX_SIZE", "800")

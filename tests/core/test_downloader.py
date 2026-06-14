@@ -10,11 +10,11 @@ from safaribooks.core.epub import build_epub, ensure_book_dirs
 class TestEpubLibraryCopy:
     @staticmethod
     def _build_test_epub(tmp_path: Path) -> Path:
-        paths = ensure_book_dirs(tmp_path / "output", "TestBook")
+        paths = ensure_book_dirs(tmp_path / "output" / "TestBook")
         (paths.oebps / "ch01.xhtml").write_text(
             "<html><body>Chapter 1</body></html>", encoding="utf-8"
         )
-        return build_epub(paths, "Test Book")
+        return build_epub(paths, tmp_path / "output" / "Test Book.epub")
 
     def test_epub_copied_to_library_epubs_dir(self, tmp_path):
         epub_path = self._build_test_epub(tmp_path)
