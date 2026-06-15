@@ -320,8 +320,8 @@ For **Kindle** users:
 
 ```bash
 uv sync              # install deps
-make check           # lint + format + type check
-make test            # run tests
+just check           # lint + format + type check
+just test            # run tests
 ```
 
 See [CONTRIBUTING.md](CONTRIBUTING.md) for the full guide.

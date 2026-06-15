@@ -3,7 +3,7 @@
 from importlib.metadata import PackageNotFoundError, version
 
 try:
-    __version__ = version("safaribooks")
+    __version__ = version("safaribookshelf")
 except PackageNotFoundError:  # pragma: no cover
     __version__ = "unknown"
 finally:

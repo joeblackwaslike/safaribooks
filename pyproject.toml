@@ -1,5 +1,5 @@
 [project]
-name = "safaribooks"
+name = "safaribookshelf"
 version = "0.1.0"
 description = "Download O'Reilly books as EPUB files."
 authors = [{ name = "Joe Black", email = "me@joeblack.nyc" }]
@@ -203,3 +203,8 @@ preview = true
 quote-style = "double"
 indent-style = "space"
 docstring-code-format = false
+
+[tool.commitizen]
+# Lint commit messages against Conventional Commits.
+# release-please owns version bumps + changelog, so no bump/version config here.
+name = "cz_conventional_commits"

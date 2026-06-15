@@ -1109,7 +1109,7 @@ wheels = [
 ]
 
 [[package]]
-name = "safaribooks"
+name = "safaribookshelf"
 version = "0.1.0"
 source = { editable = "." }
 dependencies = [
