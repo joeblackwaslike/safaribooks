@@ -52,6 +52,7 @@ dev = [
     "tox-uv~=1.29.0",
     "wemake-python-styleguide~=1.4.0",
     "pytest-timeout>=2.0",
+    "pytest-cov>=7.1.0",
 ]
 
 [build-system]

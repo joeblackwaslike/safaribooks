@@ -1,6 +1,6 @@
 default_language_version:
   python: python3.12
-default_install_hook_types: [pre-commit, commit-msg]
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
 default_stages: [pre-commit]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
@@ -21,7 +21,7 @@ repos:
       - id: ruff-format
 
   - repo: https://github.com/wemake-services/wemake-python-styleguide
-    rev: 1.0.0
+    rev: 1.4.0
     hooks:
       - id: wemake-python-styleguide
 
@@ -35,3 +35,15 @@ repos:
     hooks:
       - id: commitizen
         stages: [commit-msg]
+
+  # Full test suite + coverage. Runs on pre-push (≈40s) rather than
+  # pre-commit so it gates pushes without slowing every commit.
+  - repo: local
+    hooks:
+      - id: tests
+        name: tests (pytest + coverage)
+        entry: uv run python -m pytest tests --cov --cov-config=pyproject.toml --cov-report=term-missing -p no:faulthandler
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]
