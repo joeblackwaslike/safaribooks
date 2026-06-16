@@ -102,7 +102,7 @@ class _WaitFunc:
     def _backoff(self, attempt: int) -> float:
         """Capped exponential backoff for the given attempt number."""
         wait = self._config.base_delay * (_BACKOFF_BASE**attempt)
-        return min(wait, self._config.max_delay)
+        return float(min(wait, self._config.max_delay))
 
     def _retry_after_wait(
         self,

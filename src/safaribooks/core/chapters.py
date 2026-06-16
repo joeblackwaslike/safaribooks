@@ -296,8 +296,8 @@ def _resolve_css_href(href: str, base_url: str) -> str:
     return urljoin(base_url, href)
 
 
-def _collect_html_link_css(
-    root: html.HtmlElement,  # type: ignore[no-any-unimported]
+def _collect_html_link_css(  # type: ignore[no-any-unimported]
+    root: html.HtmlElement,
     base_url: str,
     all_css: list[str],
     discovered_css: list[str],
@@ -363,8 +363,8 @@ def _serialize_body(content_el: html.HtmlElement) -> str:  # type: ignore[no-any
         raise ParsingError(msg) from exc
 
 
-def _collect_page_css(
-    root: html.HtmlElement,  # type: ignore[no-any-unimported]
+def _collect_page_css(  # type: ignore[no-any-unimported]
+    root: html.HtmlElement,
     chapter_stylesheets: list[str],
     known_css: list[str],
     base_url: str,
@@ -383,10 +383,10 @@ def _discover_videos(root: html.HtmlElement) -> list[str]:  # type: ignore[no-an
     return [src for src in sources if src]
 
 
-def _extract_content_element(
-    root: html.HtmlElement,  # type: ignore[no-any-unimported]
+def _extract_content_element(  # type: ignore[no-any-unimported]
+    root: html.HtmlElement,
     book_id: str,
-) -> tuple[html.HtmlElement, list[str]]:  # type: ignore[no-any-unimported]
+) -> tuple[html.HtmlElement, list[str]]:
     """Return the ``#sbo-rt-content`` element and its video sources.
 
     Video sources are discovered *before* links are rewritten so the
@@ -402,12 +402,12 @@ def _extract_content_element(
     return content_el, discovered_videos
 
 
-def _maybe_apply_cover(
-    content_el: html.HtmlElement,  # type: ignore[no-any-unimported]
+def _maybe_apply_cover(  # type: ignore[no-any-unimported]
+    content_el: html.HtmlElement,
     page_css: str,
     *,
     first_page: bool,
-) -> tuple[str, html.HtmlElement, str | None]:  # type: ignore[no-any-unimported]
+) -> tuple[str, html.HtmlElement, str | None]:
     """Swap in a cover-page layout when a cover image is detected."""
     if not first_page:
         return page_css, content_el, None

@@ -528,13 +528,12 @@ def _extract_toc_list(payload: Any) -> list[dict[str, Any]]:
     """
     # mypy knows get_json returns dict, but the runtime API can vary.
     if isinstance(payload, list):
-        toc_list = payload
-    elif isinstance(payload, dict):
-        toc_list = payload.get("children") or payload.get("results") or []
-    else:
+        return payload
+    if not isinstance(payload, dict):
         msg = "Unexpected TOC response format."
         raise DownloadError(msg)
 
+    toc_list = payload.get("children") or payload.get("results") or []
     if not isinstance(toc_list, list):
         msg = "TOC data is not a list — API may have returned an error."
         raise DownloadError(msg)
