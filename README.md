@@ -1,4 +1,4 @@
-[![PyPI version](https://img.shields.io/pypi/v/safaribooks)](https://pypi.org/project/safaribooks/)
+[![PyPI version](https://img.shields.io/pypi/v/safaribookshelf)](https://pypi.org/project/safaribookshelf/)
 [![Python 3.12+](https://img.shields.io/badge/python-3.12+-blue.svg)](https://www.python.org/downloads/)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE.md)
 [![CI](https://github.com/joeblackwaslike/safaribooks/actions/workflows/main.yml/badge.svg)](https://github.com/joeblackwaslike/safaribooks/actions/workflows/main.yml)
@@ -9,6 +9,8 @@
 > Download O'Reilly books as EPUB files. Async. Cookie-based auth that actually works.
 
 For personal and educational use only. Please read O'Reilly's [Terms of Service](https://learning.oreilly.com/terms/).
+
+> **Upgrading from v1?** The CLI moved from `python3 safaribooks.py <ID>` to `safari fetch <ID>`. Run `safari --help` for the new commands. The old scripts remain as `_safaribooks_legacy.py` for reference only.
 
 ---
 
@@ -50,7 +52,7 @@ Downloaded: 1 book(s)
 <summary><strong>uv (Recommended)</strong></summary>
 
 ```bash
-uv tool install safaribooks
+uv tool install safaribookshelf
 ```
 
 </details>
@@ -59,7 +61,7 @@ uv tool install safaribooks
 <summary><strong>pip</strong></summary>
 
 ```bash
-pip install safaribooks
+pip install safaribookshelf
 ```
 
 </details>

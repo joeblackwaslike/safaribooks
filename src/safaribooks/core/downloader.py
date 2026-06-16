@@ -1,6 +1,5 @@
 """Core download orchestrator — replaces the legacy SafariBooks.__init__() pipeline."""
 
-
 import logging
 import re
 import shutil
@@ -197,8 +196,7 @@ class BookDownloader:
                 )
 
                 toc_url = (
-                    f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{self.book_id}"
-                    f"/table-of-contents/"
+                    f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{self.book_id}/table-of-contents/"
                 )
                 toc_ncx = await render_toc_ncx(client, toc_url, book_info)
                 (book_paths.oebps / "toc.ncx").write_bytes(
@@ -277,7 +275,7 @@ class BookDownloader:
             result = parse_chapter_html(
                 root,
                 chapter_stylesheet_urls,
-                known_css,
+                all_css,
                 self.book_id,
                 chapter.asset_base_url,
                 first_page=first_page,

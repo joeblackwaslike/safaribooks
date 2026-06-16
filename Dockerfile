@@ -2,12 +2,11 @@ FROM python:3.12-slim
 
 WORKDIR /app
 
-COPY --from=ghcr.io/astral-sh/uv:latest /uv /usr/local/bin/uv
+COPY --from=ghcr.io/astral-sh/uv:0.5.20 /uv /usr/local/bin/uv
 
 COPY pyproject.toml uv.lock ./
-RUN uv sync --frozen --no-dev --no-editable
-
 COPY src/ src/
+RUN uv sync --frozen --no-dev --no-editable
 
 RUN adduser --disabled-password --gecos "" appuser \
     && mkdir -p /app/Books \

@@ -17,7 +17,9 @@ class TestFetchHelp:
     """Verify the fetch command surfaces all expected options."""
 
     def test_fetch_help_shows_options(self):
-        result = runner.invoke(app, ["fetch", "--help"])
+        # Force a wide terminal so Rich does not wrap/truncate option names
+        # (CI runs at 80 columns, which split "--playlist" across lines).
+        result = runner.invoke(app, ["fetch", "--help"], env={"COLUMNS": "200"})
         assert result.exit_code == 0
         assert "book-ids" in result.output.lower() or "BOOK_IDS" in result.output
         assert "--playlist" in result.output

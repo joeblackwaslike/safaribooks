@@ -1,6 +1,5 @@
 """Tenacity retry helpers for HTTP requests with rate-limit awareness."""
 
-
 import logging
 import random
 from collections.abc import Callable
@@ -19,6 +18,8 @@ _RETRYABLE_NETWORK_ERRORS = (
     httpx.PoolTimeout,
 )
 
+_DEFAULT_RETRYABLE_STATUS_CODES: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
+
 
 class RetryConfig(BaseModel):
     """Configuration for HTTP retry behaviour."""
@@ -27,7 +28,7 @@ class RetryConfig(BaseModel):
     base_delay: float = 1.0
     max_delay: float = 60.0
     jitter: bool = True
-    retryable_status_codes: frozenset[int] = frozenset({408, 429, 500, 502, 503, 504})
+    retryable_status_codes: frozenset[int] = _DEFAULT_RETRYABLE_STATUS_CODES
     rate_limit_multiplier: float = 2.0
 
 
@@ -36,7 +37,7 @@ def is_retryable_error(exc: BaseException) -> bool:
     if isinstance(exc, _RETRYABLE_NETWORK_ERRORS):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in RetryConfig().retryable_status_codes
+        return exc.response.status_code in _DEFAULT_RETRYABLE_STATUS_CODES
     return False
 
 

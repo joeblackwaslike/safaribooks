@@ -1,6 +1,5 @@
 """Async HTTP client for the O'Reilly Learning API."""
 
-
 import asyncio
 import contextlib
 import json
@@ -93,7 +92,6 @@ class ApiClient:
         self,
         url: str,
         *,
-        stream: bool = False,
         update_cookies: bool = True,
     ) -> httpx.Response:
         """Make a GET request with cookie management and redirect handling.
@@ -102,8 +100,6 @@ class ApiClient:
         ----------
         url:
             The URL to request.
-        stream:
-            If ``True``, the response body is not immediately downloaded.
         update_cookies:
             If ``True`` (default), update client cookies from the response.
 
@@ -120,7 +116,7 @@ class ApiClient:
             When the session is expired and cannot be refreshed.
 
         """
-        return await self._request(url, is_post=False, stream=stream, update_cookies=update_cookies)
+        return await self._request(url, is_post=False, update_cookies=update_cookies)
 
     async def post(
         self,
@@ -473,7 +469,6 @@ class ApiClient:
         is_post: bool = False,
         data: dict[str, Any] | None = None,
         json_payload: dict[str, Any] | None = None,
-        stream: bool = False,
         update_cookies: bool = True,
         _redirect_count: int = 0,
     ) -> httpx.Response:
@@ -489,8 +484,6 @@ class ApiClient:
                 kwargs["json"] = json_payload
             elif data is not None:
                 kwargs["data"] = data
-        if stream:
-            kwargs["stream"] = True
 
         response: httpx.Response = await self._do_request(method, url, **kwargs)
 
@@ -504,10 +497,6 @@ class ApiClient:
             response.status_code,
         )
 
-        retryable = (self._retry_config or RetryConfig()).retryable_status_codes
-        if response.status_code in retryable:
-            response.raise_for_status()
-
         # Handle auth failures -- attempt cookie refresh then retry once.
         redirect_location = response.headers.get("location", "")
         is_auth_failure = response.status_code in (401, 403) or (
@@ -520,7 +509,6 @@ class ApiClient:
                 is_post=is_post,
                 data=data,
                 json_payload=json_payload,
-                stream=stream,
                 update_cookies=update_cookies,
                 _redirect_count=_redirect_count,
             )
@@ -531,7 +519,6 @@ class ApiClient:
             return await self._request(
                 next_url,
                 is_post=is_post,
-                stream=stream,
                 update_cookies=update_cookies,
                 _redirect_count=_redirect_count + 1,
             )
@@ -543,9 +530,19 @@ class ApiClient:
         """Execute a single HTTP request with tenacity retry on transient errors."""
         await self._rate_limiter.acquire()
         try:
-            return await self.client.request(method, url, **kwargs)
+            response = await self.client.request(method, url, **kwargs)
         except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.PoolTimeout):
             raise
         except httpx.HTTPError as exc:
             msg = f"Request failed for {url}: {exc}"
             raise ApiError(msg) from exc
+
+        # Raise on transient/retryable status codes *inside* the retried call so
+        # tenacity (via is_retryable_error) sees the HTTPStatusError and retries,
+        # honouring any Retry-After header. Auth codes (401/403) are not in the
+        # retryable set, so they fall through to the cookie-refresh handling in
+        # _request.
+        retryable = (self._retry_config or RetryConfig()).retryable_status_codes
+        if response.status_code in retryable:
+            response.raise_for_status()
+        return response

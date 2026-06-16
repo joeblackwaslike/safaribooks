@@ -90,9 +90,11 @@
     // Gemini CLI (writable — writes session history, settings, state)
     "source=${localEnv:HOME}/.gemini,target=/home/vscode/.gemini,type=bind,consistency=cached",
     // openclaw identity + workspace (writable — writes credentials, logs, workspace state)
-    "source=${localEnv:HOME}/.openclaw,target=/home/vscode/.openclaw,type=bind,consistency=cached",
-    // Docker socket (OrbStack on macOS)
-    "source=${localEnv:HOME}/.orbstack/run/docker.sock,target=/var/run/docker.sock,type=bind,consistency=cached"
+    "source=${localEnv:HOME}/.openclaw,target=/home/vscode/.openclaw,type=bind,consistency=cached"
+    // NOTE: Docker is provided by the docker-in-docker feature above. Do NOT
+    // bind-mount the host Docker socket here — it is redundant with DinD,
+    // host-specific (breaks non-OrbStack/Linux users), and grants the
+    // container root-equivalent access to the host daemon.
   ],
   "remoteEnv": {
     // Anthropic / Claude

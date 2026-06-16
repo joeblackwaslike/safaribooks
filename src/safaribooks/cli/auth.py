@@ -1,6 +1,5 @@
 """Auth command group — manage O'Reilly session cookies."""
 
-
 from pathlib import Path
 from typing import Annotated
 
@@ -103,7 +102,9 @@ def import_cookies(
         if file:
             cookie_set = from_file(file)
         else:
-            assert header is not None  # noqa: S101 — guarded above
+            if header is None:  # guarded above; defensive fallback
+                console.print("[red]Error:[/] Provide --file or --header.")
+                raise typer.Exit(code=1)
             cookie_set = from_header(header)
     except CookieError as exc:
         console.print(f"[red]Error:[/] {exc}")

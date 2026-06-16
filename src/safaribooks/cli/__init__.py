@@ -1,6 +1,5 @@
 """Command-line interface for safaribooks (built in Phase 3)."""
 
-
 from importlib.metadata import version as _pkg_version
 from typing import Annotated
 
@@ -39,7 +38,7 @@ def main(
 ) -> None:
     """Safari Books downloader CLI."""
     if version:
-        console.print(f"[bold cyan]safari[/] [green]{_pkg_version('safaribooks')}[/]")
+        console.print(f"[bold cyan]safari[/] [green]{_pkg_version('safaribookshelf')}[/]")
         raise typer.Exit
 
     ctx.ensure_object(dict)

@@ -72,14 +72,12 @@ class AsyncQueueHandler:
     async def _worker(self) -> None:
         """Background worker that processes batched logs."""
         batch: list[dict[str, Any]] = []
-        last_flush = asyncio.get_event_loop().time()
+        last_flush = asyncio.get_running_loop().time()
 
         try:
             while not self._shutdown_event.is_set():
                 try:
-                    timeout = self.flush_interval - (
-                        asyncio.get_event_loop().time() - last_flush
-                    )
+                    timeout = self.flush_interval - (asyncio.get_running_loop().time() - last_flush)
                     timeout = max(timeout, 0.01)
 
                     record = await asyncio.wait_for(
@@ -92,13 +90,13 @@ class AsyncQueueHandler:
                     if batch:
                         await self._write_batch(batch)
                         batch.clear()
-                        last_flush = asyncio.get_event_loop().time()
+                        last_flush = asyncio.get_running_loop().time()
                     continue
 
                 if len(batch) >= self.batch_size:
                     await self._write_batch(batch)
                     batch.clear()
-                    last_flush = asyncio.get_event_loop().time()
+                    last_flush = asyncio.get_running_loop().time()
 
         finally:
             while not self.queue.empty():

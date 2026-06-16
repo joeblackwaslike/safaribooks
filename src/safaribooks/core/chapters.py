@@ -1,6 +1,5 @@
 """HTML parsing, link processing, and TOC normalization for chapters."""
 
-
 import logging
 import pathlib
 import re
@@ -220,7 +219,7 @@ def find_cover_image(root: HtmlElement) -> str | None:  # type: ignore[no-any-un
 def parse_chapter_html(  # type: ignore[no-any-unimported]
     root: HtmlElement,
     chapter_stylesheets: list[str],
-    known_css: set[str],
+    known_css: list[str],
     book_id: str,
     base_url: str,
     *,
@@ -241,10 +240,11 @@ def parse_chapter_html(  # type: ignore[no-any-unimported]
         CSS URLs derived from the chapter's metadata (stylesheets +
         site_styles).
     known_css:
-        Set of CSS URLs already collected from previous chapters.
-        Used only for deduplication when assigning ``Style##`` indices;
-        callers should merge ``discovered_css`` into this set after the
-        call.
+        Ordered list of CSS URLs already collected from previous
+        chapters, in download order. Used as the stable index base when
+        assigning ``Style##`` filenames, so the links emitted here line
+        up with the files written by ``download_css``; callers should
+        append ``discovered_css`` to this list after the call.
     book_id:
         The O'Reilly book identifier (for link rewriting).
     base_url:

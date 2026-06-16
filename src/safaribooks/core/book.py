@@ -1,6 +1,5 @@
 """Book metadata retrieval and chapter normalization."""
 
-
 import logging
 from pathlib import Path
 from typing import Any
@@ -290,7 +289,7 @@ async def fetch_default_cover(
     response = None
     for url in hd_url_attempts:
         try:
-            response = await client.get(url, stream=True)
+            response = await client.get(url)
             if response.status_code == 200:
                 logger.info("Retrieved HD cover from: %s", url)
                 break
