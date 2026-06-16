@@ -1,33 +1,40 @@
 """URL constants, HTTP headers, and HTML/EPUB templates for safaribooks."""
 
+from collections.abc import Mapping
+from types import MappingProxyType
+
 # ---------------------------------------------------------------------------
 # Host and URL constants
 # ---------------------------------------------------------------------------
 ORLY_BASE_HOST = "oreilly.com"
-SAFARI_BASE_HOST = "learning." + ORLY_BASE_HOST
-API_ORIGIN_HOST = "api." + ORLY_BASE_HOST
+SAFARI_BASE_HOST = "learning.oreilly.com"
+API_ORIGIN_HOST = "api.oreilly.com"
 
-ORLY_BASE_URL = "https://www." + ORLY_BASE_HOST
-SAFARI_BASE_URL = "https://" + SAFARI_BASE_HOST
-API_ORIGIN_URL = "https://" + API_ORIGIN_HOST
-PROFILE_URL = SAFARI_BASE_URL + "/profile/"
+ORLY_BASE_URL = "https://www.oreilly.com"
+SAFARI_BASE_URL = "https://learning.oreilly.com"
+API_ORIGIN_URL = "https://api.oreilly.com"
+PROFILE_URL = "https://learning.oreilly.com/profile/"
 
 # ---------------------------------------------------------------------------
 # API URL templates (use str.format with book_id)
 # ---------------------------------------------------------------------------
-LOGIN_URL = ORLY_BASE_URL + "/member/auth/login/"
-LOGIN_ENTRY_URL = SAFARI_BASE_URL + "/login/unified/?next=/home/"
+LOGIN_URL = "https://www.oreilly.com/member/auth/login/"
+LOGIN_ENTRY_URL = "https://learning.oreilly.com/login/unified/?next=/home/"
 
-API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:{0}/"
-CHAPTERS_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epub-chapters/?epub_identifier=urn:orm:book:{0}"
-SEARCH_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/search/?query={0}&limit=1&formats=book"
-SEARCH_QUERY_TEMPLATE = SAFARI_BASE_URL + "/api/v2/search/?query={query}&limit={limit}&formats=book"
-FILES_API_TEMPLATE = SAFARI_BASE_URL + "/api/v2/epubs/urn:orm:book:{0}/files"
+API_TEMPLATE = "https://learning.oreilly.com/api/v2/epubs/urn:orm:book:{0}/"
+CHAPTERS_API_TEMPLATE = (
+    "https://learning.oreilly.com/api/v2/epub-chapters/?epub_identifier=urn:orm:book:{0}"
+)
+SEARCH_API_TEMPLATE = "https://learning.oreilly.com/api/v2/search/?query={0}&limit=1&formats=book"
+SEARCH_QUERY_TEMPLATE = (
+    "https://learning.oreilly.com/api/v2/search/?query={query}&limit={limit}&formats=book"
+)
+FILES_API_TEMPLATE = "https://learning.oreilly.com/api/v2/epubs/urn:orm:book:{0}/files"
 
 # ---------------------------------------------------------------------------
 # Default HTTP headers
 # ---------------------------------------------------------------------------
-HEADERS: dict[str, str] = {
+HEADERS: Mapping[str, str] = MappingProxyType({
     "Accept": (
         "text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,image/apng,*/*;q=0.8"
     ),
@@ -38,22 +45,22 @@ HEADERS: dict[str, str] = {
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
         "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
     ),
-}
+})
 
 # ---------------------------------------------------------------------------
 # Cookie authentication
 # ---------------------------------------------------------------------------
-REQUIRED_COOKIES: frozenset[str] = frozenset({
+REQUIRED_COOKIES: frozenset[str] = frozenset((
     "groot_sessionid",
     "jwt",
     "csrf_access_token",
     "logged_in",
-})
+))
 
-REFRESH_COOKIES: frozenset[str] = frozenset({
+REFRESH_COOKIES: frozenset[str] = frozenset((
     "orm-jwt",
     "orm-rt",
-})
+))
 
 BROWSER_JS: str = (
     "// Run this in your browser console on https://learning.oreilly.com:\n"

@@ -10,6 +10,60 @@ from safaribooks.core.models import SearchResult
 
 logger = logging.getLogger(__name__)
 
+_TITLE_MIN_WIDTH = 30
+_AUTHORS_MIN_WIDTH = 15
+_ID_WIDTH = 16
+_PUBLISHED_WIDTH = 12
+
+_UNKNOWN_AUTHORS = "[dim]Unknown[/dim]"
+_MISSING_DATE = "[dim]n/a[/dim]"
+
+
+def _build_results_table(books: list[SearchResult]) -> Table:
+    """Build the Rich table listing the search results."""
+    table = Table(show_header=True, header_style="bold", padding=(0, 1))
+    table.add_column("#", style="dim", width=4, justify="right")
+    table.add_column("Title", min_width=_TITLE_MIN_WIDTH)
+    table.add_column("Author(s)", min_width=_AUTHORS_MIN_WIDTH)
+    table.add_column("ID", width=_ID_WIDTH)
+    table.add_column("Published", width=_PUBLISHED_WIDTH)
+
+    for idx, entry in enumerate(books, start=1):
+        authors = ", ".join(entry.authors) if entry.authors else _UNKNOWN_AUTHORS
+        table.add_row(
+            str(idx),
+            entry.title,
+            authors,
+            entry.book_id,
+            entry.issued or _MISSING_DATE,
+        )
+
+    return table
+
+
+def _announce_selection(console: Console, selected: SearchResult) -> SearchResult:
+    """Report the chosen result and return it unchanged."""
+    console.print(f"[green]Selected:[/] {selected.title} ({selected.book_id})")
+    return selected
+
+
+def _prompt_for_choice(console: Console, books: list[SearchResult]) -> SearchResult | None:
+    """Prompt the user interactively and resolve their choice."""
+    choice = IntPrompt.ask(
+        f"[bold]Select a book[/] [dim][1-{len(books)}, 0 to cancel][/dim]",
+        console=console,
+        default=1,
+    )
+
+    if choice == 0:
+        console.print("[yellow]Selection cancelled.[/]")
+        return None
+    if 1 <= choice <= len(books):
+        return _announce_selection(console, books[choice - 1])
+
+    console.print("[red]Invalid selection.[/]")
+    return None
+
 
 def select_book(
     console: Console,
@@ -37,46 +91,11 @@ def select_book(
         return None
 
     console.print(f'\n[bold]Found {len(results)} book(s) matching[/] "[cyan]{query}[/]":\n')
-
-    table = Table(show_header=True, header_style="bold", padding=(0, 1))
-    table.add_column("#", style="dim", width=4, justify="right")
-    table.add_column("Title", min_width=30)
-    table.add_column("Author(s)", min_width=15)
-    table.add_column("ID", width=16)
-    table.add_column("Published", width=12)
-
-    for idx, result in enumerate(results, start=1):
-        authors = ", ".join(result.authors) if result.authors else "[dim]Unknown[/dim]"
-        table.add_row(
-            str(idx),
-            result.title,
-            authors,
-            result.book_id,
-            result.issued or "[dim]n/a[/dim]",
-        )
-
-    console.print(table)
+    console.print(_build_results_table(results))
     console.print()
 
     if not console.is_terminal:
         console.print("[yellow]Non-interactive mode — auto-selecting first result.[/]")
-        selected = results[0]
-        console.print(f"[green]Selected:[/] {selected.title} ({selected.book_id})")
-        return selected
+        return _announce_selection(console, results[0])
 
-    choice = IntPrompt.ask(
-        f"[bold]Select a book[/] [dim][1-{len(results)}, 0 to cancel][/dim]",
-        console=console,
-        default=1,
-    )
-
-    if choice == 0:
-        console.print("[yellow]Selection cancelled.[/]")
-        return None
-    if 1 <= choice <= len(results):
-        selected = results[choice - 1]
-        console.print(f"[green]Selected:[/] {selected.title} ({selected.book_id})")
-        return selected
-
-    console.print("[red]Invalid selection.[/]")
-    return None
+    return _prompt_for_choice(console, results)

@@ -41,8 +41,8 @@ async def search_books(
     """
     url = SEARCH_QUERY_TEMPLATE.format(query=quote_plus(query), limit=limit)
     try:
-        data = await client.get_json(url)
+        payload = await client.get_json(url)
     except ApiError as exc:
         raise SearchError(f"Search failed for query '{query}': {exc}") from exc
 
-    return SearchResponse.model_validate(data)
+    return SearchResponse.model_validate(payload)

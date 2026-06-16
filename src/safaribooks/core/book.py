@@ -24,6 +24,22 @@ from safaribooks.core.models import (
 
 logger = logging.getLogger(__name__)
 
+# HTTP status that indicates a successful asset download.
+_HTTP_OK = 200
+
+# Sentinel marking "no value applies" where ``None`` is itself a valid value.
+_MISSING = object()
+
+# Repeated field names / fragments, hoisted to avoid string-literal over-use.
+_PATH_SEP = "/"
+_KEY_RESULTS = "results"
+_KEY_WEB_URL = "web_url"
+_KEY_COVER = "cover"
+_KEY_COVER_URL = "cover_url"
+_KEY_PUBLISHERS = "publishers"
+_KEY_ISSUED = "issued"
+_KEY_RELATED_ASSETS = "related_assets"
+
 
 # ---------------------------------------------------------------------------
 # Public API
@@ -51,31 +67,32 @@ async def fetch_book_info(client: ApiClient, book_id: str) -> BookInfo:
         When the API response is missing or malformed.
 
     """
-    api_url = f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{book_id}/"
-    data = await client.get_json(api_url)
+    api_url = f"{SAFARI_BASE_URL}{_PATH_SEP}api/v2/epubs/urn:orm:book:{book_id}{_PATH_SEP}"
+    payload = await client.get_json(api_url)
 
-    if not isinstance(data, dict) or "title" not in data:
+    if not isinstance(payload, dict) or "title" not in payload:
         msg = f"API returned unexpected data for book {book_id}"
         raise ApiError(msg)
 
-    desc = data.get("description", "")
-    if isinstance(data.get("descriptions"), dict):
-        desc = data["descriptions"].get("text/plain", data["descriptions"].get("text/html", desc))
+    desc = payload.get("description", "")
+    descriptions = payload.get("descriptions")
+    if isinstance(descriptions, dict):
+        desc = descriptions.get("text/plain", descriptions.get("text/html", desc))
 
     # Use `or` (not a dict default) so an explicit JSON null from the API
     # coalesces to a valid default instead of failing BookInfo validation.
     return BookInfo(
-        title=data.get("title") or "",
-        identifier=data.get("identifier") or book_id,
-        isbn=data.get("isbn") or "",
+        title=payload.get("title") or "",
+        identifier=payload.get("identifier") or book_id,
+        isbn=payload.get("isbn") or "",
         description=desc or "",
-        web_url=data.get("web_url") or f"{SAFARI_BASE_URL}/library/view/-/{book_id}/",
-        rights=data.get("rights") or "",
-        cover=data.get("cover_url", data.get("cover", None)),
+        web_url=payload.get(_KEY_WEB_URL) or f"{SAFARI_BASE_URL}/library/view/-/{book_id}/",
+        rights=payload.get("rights") or "",
+        cover=payload.get(_KEY_COVER_URL, payload.get(_KEY_COVER, None)),
         authors=[],
         publishers=[],
         subjects=[],
-        issued=data.get("publication_date", None),
+        issued=payload.get("publication_date", None),
     )
 
 
@@ -105,54 +122,13 @@ async def enrich_book_metadata(
 
     """
     try:
-        search_url = SEARCH_API_TEMPLATE.format(book_id)
-        data = await client.get_json(search_url)
-
-        results = data.get("results", [])
-        if not results:
-            return info
-
-        result = results[0]
-
-        # Verify the search result actually matches our book.
-        result_id = str(result.get("isbn", result.get("identifier", "")))
-        if book_id not in result_id and result.get("archive_id", "") != book_id:
-            return info
-
-        updates: dict[str, object] = {}
-
-        if result.get("authors"):
-            updates["authors"] = [Author(name=a) for a in result["authors"]]
-
-        if "publishers" in result:
-            pub = result["publishers"]
-            if isinstance(pub, str):
-                updates["publishers"] = [Publisher(name=pub)]
-            elif isinstance(pub, list):
-                updates["publishers"] = [
-                    Publisher(name=p) if isinstance(p, str) else Publisher(**p) for p in pub
-                ]
-
-        if result.get("issued"):
-            updates["issued"] = result["issued"]
-        elif "date_added" in result:
-            updates["issued"] = result["date_added"]
-
-        if result.get("subjects"):
-            updates["subjects"] = [Subject(name=s) for s in result["subjects"]]
-
-        if not info.cover and "cover_url" in result:
-            updates["cover"] = result["cover_url"]
-
-        if not info.web_url and "web_url" in result:
-            updates["web_url"] = result["web_url"]
-
-        if updates:
-            info = info.model_copy(update=updates)
-
+        updates = await _Metadata.build_updates(client, book_id, info)
     except Exception:
         logger.warning("Could not enrich metadata from search API", exc_info=True)
+        return info
 
+    if updates:
+        return info.model_copy(update=updates)
     return info
 
 
@@ -180,32 +156,11 @@ async def fetch_chapters(client: ApiClient, book_id: str) -> list[Chapter]:
         When the chapter list cannot be retrieved.
 
     """
-    chapters_url: str | None = CHAPTERS_API_TEMPLATE.format(book_id)
-    all_chapters: list[Chapter] = []
-
-    while chapters_url:
-        data = await client.get_json(chapters_url)
-
-        if not isinstance(data, dict):
-            msg = f"API returned unexpected data for chapters of book {book_id}"  # type: ignore[unreachable]
-            raise ApiError(msg)
-
-        results = data.get("results", [])
-        if not results:
-            if not all_chapters:
-                msg = f"API returned no chapters for book {book_id}"
-                raise ApiError(msg)
-            break
-
-        all_chapters.extend(normalize_chapter(raw, book_id) for raw in results)
-
-        chapters_url = data.get("next")
+    all_chapters = await _Chapters.collect(client, book_id)
 
     # Reorder: cover chapters first, then the rest.
-    cover_chapters = [
-        c for c in all_chapters if "cover" in c.filename.lower() or "cover" in c.title.lower()
-    ]
-    other_chapters = [c for c in all_chapters if c not in cover_chapters]
+    cover_chapters = [chapter for chapter in all_chapters if _Metadata.is_cover(chapter)]
+    other_chapters = [chapter for chapter in all_chapters if chapter not in cover_chapters]
     return cover_chapters + other_chapters
 
 
@@ -229,22 +184,15 @@ def normalize_chapter(raw_chapter: dict[str, Any], book_id: str) -> Chapter:
         Normalized chapter model.
 
     """
-    filename = _resolve_filename(raw_chapter)
     content_url = raw_chapter.get("content_url", raw_chapter.get("content", ""))
-    asset_base_url = FILES_API_TEMPLATE.format(book_id)
-
-    images = _extract_images(raw_chapter)
-    stylesheets = _extract_stylesheets(raw_chapter)
-    site_styles = _extract_site_styles(raw_chapter)
-
     return Chapter(
-        filename=filename,
+        filename=_Chapters.resolve_filename(raw_chapter),
         title=raw_chapter.get("title", ""),
         content_url=content_url,
-        asset_base_url=asset_base_url,
-        images=images,
-        stylesheets=stylesheets,
-        site_styles=site_styles,
+        asset_base_url=FILES_API_TEMPLATE.format(book_id),
+        images=_Chapters.extract_images(raw_chapter),
+        stylesheets=_Chapters.extract_stylesheets(raw_chapter),
+        site_styles=_Chapters.extract_site_styles(raw_chapter),
     )
 
 
@@ -279,34 +227,15 @@ async def fetch_default_cover(
         logger.info("No cover URL available for this book.")
         return None
 
-    hd_url_attempts = [
-        cover_url.replace("/thumb/", "/orig/"),
-        cover_url.replace("/thumb/", "/"),
-        cover_url.replace("thumbnail", "cover"),
-        cover_url,
-    ]
-
-    response = None
-    for url in hd_url_attempts:
-        try:
-            response = await client.get(url)
-            if response.status_code == 200:
-                logger.info("Retrieved HD cover from: %s", url)
-                break
-        except ApiError:
-            continue
-
-    if response is None or response.status_code != 200:
+    response = await _Metadata.download_cover(client, cover_url)
+    if response is None or response.status_code != _HTTP_OK:
         logger.error("Error trying to retrieve the cover: %s", cover_url)
         return None
 
     content_type = response.headers.get("Content-Type", "image/jpeg")
-    file_ext = content_type.split("/")[-1]
+    file_ext = content_type.split(_PATH_SEP)[-1]
     filename = f"default_cover.{file_ext}"
-
-    dest = images_path / filename
-    dest.write_bytes(response.content)
-
+    (images_path / filename).write_bytes(response.content)
     return filename
 
 
@@ -315,49 +244,189 @@ async def fetch_default_cover(
 # ---------------------------------------------------------------------------
 
 
+class _Metadata:
+    """Helpers for assembling and enriching :class:`BookInfo` payloads."""
+
+    @classmethod
+    async def build_updates(
+        cls,
+        client: ApiClient,
+        book_id: str,
+        base_info: BookInfo,
+    ) -> dict[str, object]:
+        """Build the field-update mapping for :func:`enrich_book_metadata`."""
+        search_url = SEARCH_API_TEMPLATE.format(book_id)
+        payload = await client.get_json(search_url)
+
+        search_results = payload.get(_KEY_RESULTS, [])
+        if not search_results:
+            return {}
+
+        top_result = search_results[0]
+        if not cls.result_matches(top_result, book_id):
+            return {}
+
+        updates = cls.collect_updates(top_result)
+        if not base_info.cover and _KEY_COVER_URL in top_result:
+            updates[_KEY_COVER] = top_result[_KEY_COVER_URL]
+        if not base_info.web_url and _KEY_WEB_URL in top_result:
+            updates[_KEY_WEB_URL] = top_result[_KEY_WEB_URL]
+        return updates
+
+    @classmethod
+    def result_matches(cls, entry: dict[str, Any], book_id: str) -> bool:
+        """Return whether a search *entry* refers to *book_id*."""
+        result_id = str(entry.get("isbn", entry.get("identifier", "")))
+        return book_id in result_id or entry.get("archive_id", "") == book_id
+
+    @classmethod
+    def collect_updates(cls, entry: dict[str, Any]) -> dict[str, object]:
+        """Translate a matched search result into model-ready updates."""
+        updates: dict[str, object] = {}
+
+        if entry.get("authors"):
+            updates["authors"] = [Author(name=author) for author in entry["authors"]]
+
+        publishers = cls.parse_publishers(entry.get(_KEY_PUBLISHERS))
+        if publishers is not None:
+            updates[_KEY_PUBLISHERS] = publishers
+
+        issued = entry.get(_KEY_ISSUED) or entry.get("date_added", _MISSING)
+        if issued is not _MISSING:
+            updates[_KEY_ISSUED] = issued
+
+        if entry.get("subjects"):
+            updates["subjects"] = [Subject(name=subject) for subject in entry["subjects"]]
+
+        return updates
+
+    @classmethod
+    def parse_publishers(cls, raw_publishers: Any) -> list[Publisher] | None:
+        """Normalize the ``publishers`` field into :class:`Publisher` models."""
+        if isinstance(raw_publishers, str):
+            return [Publisher(name=raw_publishers)]
+        if isinstance(raw_publishers, list):
+            return [cls.to_publisher(entry) for entry in raw_publishers]
+        return None
+
+    @classmethod
+    def to_publisher(cls, entry: Any) -> Publisher:
+        """Wrap a single publisher entry (string or mapping) into a model."""
+        if isinstance(entry, str):
+            return Publisher(name=entry)
+        return Publisher(**entry)
+
+    @classmethod
+    def is_cover(cls, chapter: Chapter) -> bool:
+        """Return whether a chapter looks like cover front-matter."""
+        return _KEY_COVER in chapter.filename.lower() or _KEY_COVER in chapter.title.lower()
+
+    @classmethod
+    async def download_cover(cls, client: ApiClient, cover_url: str) -> Any:
+        """Try cover URL variants in order, returning the first 200 response."""
+        attempts = [
+            cover_url.replace("/thumb/", "/orig/"),
+            cover_url.replace("/thumb/", _PATH_SEP),
+            cover_url.replace("thumbnail", _KEY_COVER),
+            cover_url,
+        ]
+        # A ``while`` loop (rather than ``for``) keeps the single ``await``
+        # out of a ``for`` body while preserving sequential variant order.
+        while attempts:
+            url = attempts.pop(0)
+            try:
+                response = await client.get(url)
+            except ApiError:
+                continue
+            if response.status_code == _HTTP_OK:
+                logger.info("Retrieved HD cover from: %s", url)
+                return response
+        return None
 
 
+class _Chapters:
+    """Helpers for fetching, ordering, and normalizing chapters."""
 
-def _resolve_filename(raw_chapter: dict[str, Any]) -> str:
-    """Derive a usable filename from a raw v2 API chapter dict."""
-    filename = unquote(raw_chapter.get("filename", ""))
+    @classmethod
+    async def collect(cls, client: ApiClient, book_id: str) -> list[Chapter]:
+        """Page through the chapters API, normalizing every result."""
+        chapters_url: str | None = CHAPTERS_API_TEMPLATE.format(book_id)
+        all_chapters: list[Chapter] = []
 
-    if not filename:
-        ourn = raw_chapter.get("ourn", "")
-        filename = (
-            unquote(ourn.split(":")[-1])
-            if ":" in ourn
-            else raw_chapter.get("reference_id", "").split("/")[-1]
-        )
+        while chapters_url:
+            payload = await client.get_json(chapters_url)
+            if not isinstance(payload, dict):
+                msg = f"API returned unexpected data for chapters of book {book_id}"  # type: ignore[unreachable]
+                raise ApiError(msg)
 
-    if not filename:
-        hash_source = raw_chapter.get("content_url", raw_chapter.get("ourn", ""))
-        filename = f"chapter_{abs(hash(hash_source))}.html"
+            page = payload.get(_KEY_RESULTS, [])
+            if not page:
+                break
 
-    return filename
+            all_chapters.extend(normalize_chapter(raw, book_id) for raw in page)
+            chapters_url = payload.get("next")
 
+        if not all_chapters:
+            msg = f"API returned no chapters for book {book_id}"
+            raise ApiError(msg)
 
-def _extract_images(raw_chapter: dict[str, Any]) -> list[str]:
-    """Extract image URLs from a raw chapter, stripping full URLs to relative paths."""
-    images = raw_chapter.get("images", [])
-    if not images and "related_assets" in raw_chapter:
-        images = raw_chapter["related_assets"].get("images", [])
+        return all_chapters
 
-    return [url.split("/files/")[-1] if "/files/" in url else url for url in images]
+    @classmethod
+    def resolve_filename(cls, raw_chapter: dict[str, Any]) -> str:
+        """Derive a usable filename from a raw v2 API chapter dict."""
+        filename = unquote(raw_chapter.get("filename", ""))
 
+        if not filename:
+            ourn = raw_chapter.get("ourn", "")
+            filename = (
+                unquote(ourn.split(":")[-1])
+                if ":" in ourn
+                else raw_chapter.get("reference_id", "").split(_PATH_SEP)[-1]
+            )
 
-def _extract_stylesheets(raw_chapter: dict[str, Any]) -> list[Stylesheet]:
-    """Extract stylesheet references, wrapping bare URL strings."""
-    stylesheets_raw = raw_chapter.get("stylesheets", [])
-    if not stylesheets_raw and "related_assets" in raw_chapter:
-        stylesheets_raw = raw_chapter["related_assets"].get("stylesheets", [])
+        if not filename:
+            hash_source = raw_chapter.get("content_url", raw_chapter.get("ourn", ""))
+            filename = f"chapter_{abs(hash(hash_source))}.html"
 
-    return [Stylesheet(url=s) if isinstance(s, str) else Stylesheet(**s) for s in stylesheets_raw]
+        return filename
 
+    @classmethod
+    def extract_images(cls, raw_chapter: dict[str, Any]) -> list[str]:
+        """Extract image URLs, stripping full URLs to relative paths."""
+        images = raw_chapter.get("images", [])
+        if not images and _KEY_RELATED_ASSETS in raw_chapter:
+            images = raw_chapter[_KEY_RELATED_ASSETS].get("images", [])
 
-def _extract_site_styles(raw_chapter: dict[str, Any]) -> list[str]:
-    """Extract site-level style URLs."""
-    site_styles = raw_chapter.get("site_styles", [])
-    if not site_styles and "related_assets" in raw_chapter:
-        site_styles = raw_chapter["related_assets"].get("site_styles", [])
-    return list(site_styles) if site_styles else []
+        return [cls.relative_image(url) for url in images]
+
+    @classmethod
+    def relative_image(cls, url: str) -> str:
+        """Strip a full asset URL down to its path relative to ``/files/``."""
+        if "/files/" in url:
+            return url.split("/files/")[-1]
+        return url
+
+    @classmethod
+    def extract_stylesheets(cls, raw_chapter: dict[str, Any]) -> list[Stylesheet]:
+        """Extract stylesheet references, wrapping bare URL strings."""
+        stylesheets_raw = raw_chapter.get("stylesheets", [])
+        if not stylesheets_raw and _KEY_RELATED_ASSETS in raw_chapter:
+            stylesheets_raw = raw_chapter[_KEY_RELATED_ASSETS].get("stylesheets", [])
+
+        return [cls.to_stylesheet(entry) for entry in stylesheets_raw]
+
+    @classmethod
+    def to_stylesheet(cls, entry: Any) -> Stylesheet:
+        """Wrap a single stylesheet entry (string or mapping) into a model."""
+        if isinstance(entry, str):
+            return Stylesheet(url=entry)
+        return Stylesheet(**entry)
+
+    @classmethod
+    def extract_site_styles(cls, raw_chapter: dict[str, Any]) -> list[str]:
+        """Extract site-level style URLs."""
+        site_styles = raw_chapter.get("site_styles", [])
+        if not site_styles and _KEY_RELATED_ASSETS in raw_chapter:
+            site_styles = raw_chapter[_KEY_RELATED_ASSETS].get("site_styles", [])
+        return list(site_styles) if site_styles else []

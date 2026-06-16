@@ -6,6 +6,8 @@ import time
 
 logger = logging.getLogger(__name__)
 
+_ONE_TOKEN = 1.0
+
 
 class TokenBucketRateLimiter:
     """Async token bucket rate limiter.
@@ -36,13 +38,6 @@ class TokenBucketRateLimiter:
         """Maximum bucket capacity."""
         return self._burst
 
-    def _refill(self) -> None:
-        """Add tokens based on elapsed time since last refill."""
-        now = time.monotonic()
-        elapsed = now - self._last_refill
-        self._tokens = min(self._burst, self._tokens + elapsed * self._rate)
-        self._last_refill = now
-
     async def acquire(self) -> None:
         """Wait until a token is available, then consume one.
 
@@ -56,12 +51,19 @@ class TokenBucketRateLimiter:
         while True:
             async with self._lock:
                 self._refill()
-                if self._tokens >= 1.0:
-                    self._tokens -= 1.0
+                if self._tokens >= _ONE_TOKEN:
+                    self._tokens -= _ONE_TOKEN
                     return
 
-                deficit = 1.0 - self._tokens
+                deficit = _ONE_TOKEN - self._tokens
                 wait_time = deficit / self._rate
                 logger.debug("Rate limiter: waiting %.3fs for token", wait_time)
 
             await asyncio.sleep(wait_time)
+
+    def _refill(self) -> None:
+        """Add tokens based on elapsed time since last refill."""
+        now = time.monotonic()
+        elapsed = now - self._last_refill
+        self._tokens = min(self._burst, self._tokens + elapsed * self._rate)
+        self._last_refill = now

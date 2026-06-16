@@ -1,6 +1,5 @@
 """Cookie extraction, parsing, validation, and persistence for O'Reilly sessions."""
 
-
 import json
 import logging
 from pathlib import Path
@@ -17,6 +16,15 @@ logger = logging.getLogger(__name__)
 # Supported browsers for automatic cookie extraction.
 _SUPPORTED_BROWSERS = ("chrome", "firefox", "edge", "chromium")
 
+# File mode granting read/write to the owner only.
+_OWNER_ONLY_MODE = 0o600
+
+# Domain fragment used to filter browser-extension cookie exports.
+_OREILLY_DOMAIN = ".oreilly.com"
+
+# Below this count a cookie set is likely an incomplete extraction.
+_MIN_EXPECTED_COOKIES = 3
+
 
 # ---------------------------------------------------------------------------
 # Internal helpers
@@ -25,7 +33,21 @@ _SUPPORTED_BROWSERS = ("chrome", "firefox", "edge", "chromium")
 
 def _normalize_cookies(cookies: dict[str, str]) -> dict[str, str]:
     """Strip whitespace from keys/values and drop empty entries."""
-    return {k.strip(): v.strip() for k, v in cookies.items() if k.strip() and v.strip()}
+    return {
+        name.strip(): raw_value.strip()
+        for name, raw_value in cookies.items()
+        if name.strip() and raw_value.strip()
+    }
+
+
+def _split_pair(segment: str) -> tuple[str, str] | None:
+    """Split one ``key=value`` segment into a stripped name/value tuple."""
+    idx = segment.find("=")
+    if idx == -1:
+        return None
+    name = segment[:idx].strip()
+    raw_value = segment[idx + 1 :].strip()
+    return name, raw_value
 
 
 def _parse_header(header_str: str) -> dict[str, str]:
@@ -38,46 +60,103 @@ def _parse_header(header_str: str) -> dict[str, str]:
     cookies: dict[str, str] = {}
     for raw_pair in text.split(";"):
         segment = raw_pair.strip()
-        if not segment:
-            continue
-        idx = segment.find("=")
-        if idx == -1:
-            continue
-        cookies[segment[:idx].strip()] = segment[idx + 1 :].strip()
+        pair = _split_pair(segment) if segment else None
+        if pair is not None:
+            cookies[pair[0]] = pair[1]
     return cookies
+
+
+def _decode_json(raw: str) -> object:
+    """Decode JSON, transparently unwrapping double-encoded strings."""
+    decoded = raw
+    if decoded.startswith('"') and decoded.endswith('"'):
+        decoded = json.loads(decoded)
+    return json.loads(decoded)
+
+
+def _is_oreilly_entry(entry: dict[str, object]) -> bool:
+    """Return whether an extension entry belongs to the O'Reilly domain."""
+    if "name" not in entry:
+        return False
+    domain = entry.get("domain", "")
+    return not domain or _OREILLY_DOMAIN in str(domain)
+
+
+def _cookies_from_extension(entries: list[object]) -> dict[str, str]:
+    """Build a cookie dict from a browser-extension ``{name, value}`` array."""
+    cookies: dict[str, str] = {}
+    for entry in entries:
+        if isinstance(entry, dict) and _is_oreilly_entry(entry):
+            name = str(entry["name"])
+            cookies[name] = str(entry.get("value", ""))
+    return cookies
+
+
+def _is_extension_array(payload: list[object]) -> bool:
+    """Return whether the payload looks like an extension cookie array."""
+    if not payload:
+        return False
+    first = payload[0]
+    return isinstance(first, dict) and "name" in first
+
+
+def _cookies_from_json(raw: str) -> dict[str, str] | None:
+    """Parse JSON cookie input, returning ``None`` when it is not JSON."""
+    try:
+        payload = _decode_json(raw)
+    except (json.JSONDecodeError, ValueError, TypeError):
+        return None
+
+    if isinstance(payload, dict):
+        return dict(payload)
+    if isinstance(payload, list) and _is_extension_array(payload):
+        return _cookies_from_extension(payload)
+    return None
 
 
 def _parse_auto(text: str) -> dict[str, str]:
     """Auto-detect input format and return a cookie dict.
 
-    Supports JSON objects, browser-extension arrays (``[{name, value, ...}]``),
-    and raw ``Cookie:`` header strings.
+    Supports JSON objects, browser-extension arrays
+    (``[{name, value, ...}]``), and raw ``Cookie:`` header strings.
     """
     raw = text.strip()
 
     # Try JSON first (handles double-encoded strings too).
-    try:
-        decoded = raw
-        if decoded.startswith('"') and decoded.endswith('"'):
-            decoded = json.loads(decoded)
-        data = json.loads(decoded)
-
-        if isinstance(data, dict):
-            return dict(data)
-
-        if isinstance(data, list) and data and isinstance(data[0], dict) and "name" in data[0]:
-            return {
-                c["name"]: c.get("value", "")
-                for c in data
-                if isinstance(c, dict)
-                and "name" in c
-                and (not c.get("domain") or ".oreilly.com" in c.get("domain", ""))
-            }
-    except (json.JSONDecodeError, ValueError, TypeError):
-        pass
+    from_json = _cookies_from_json(raw)
+    if from_json is not None:
+        return from_json
 
     # Fall back to raw cookie header string.
     return _parse_header(raw)
+
+
+def _print_paste_instructions(console: Console) -> None:
+    """Print the accepted cookie input formats to the given console."""
+    console.print(
+        "[bold]Paste cookies from your browser, then press Enter on an empty line to finish.[/]"
+    )
+    console.print("  Accepted formats:")
+    json_example = BROWSER_JS.splitlines()[-1]
+    console.print(f"    - JSON from console:  [dim]{json_example}[/]")
+    console.print("    - Raw Cookie header:  [dim]Cookie: k1=v1; k2=v2[/]")
+    console.print('    - Extension export:   [dim][{"name":"k","value":"v",...}, ...][/]')
+    console.print()
+
+
+def _read_pasted_lines() -> list[str]:
+    """Read lines from stdin until an empty line or EOF is encountered."""
+    lines: list[str] = []
+    while True:
+        prompt = "[green] [/]" if lines else "[green]>[/]"
+        try:
+            line = Prompt.ask(prompt)
+        except EOFError:
+            break
+        if not line.strip():
+            break
+        lines.append(line)
+    return lines
 
 
 # ---------------------------------------------------------------------------
@@ -103,7 +182,7 @@ def parse_header(header_str: str) -> dict[str, str]:
 def from_browser(browser_name: str) -> CookieSet:
     """Extract cookies from an installed browser via *browser_cookie3*."""
     try:
-        import browser_cookie3  # noqa: PLC0415
+        import browser_cookie3
     except ImportError:
         msg = (
             "browser_cookie3 is not installed. "
@@ -118,7 +197,8 @@ def from_browser(browser_name: str) -> CookieSet:
         "chromium": browser_cookie3.chromium,
     }
     if browser_name not in browsers:
-        msg = f"Unsupported browser {browser_name!r}. Choose from: {', '.join(sorted(browsers))}"
+        choices = ", ".join(sorted(browsers))
+        msg = f"Unsupported browser {browser_name!r}. Choose from: {choices}"
         raise CookieError(msg)
 
     try:
@@ -130,32 +210,16 @@ def from_browser(browser_name: str) -> CookieSet:
         )
         raise CookieError(msg) from exc
 
-    raw = _normalize_cookies({c.name: c.value for c in cookie_jar})
+    raw = _normalize_cookies({cookie.name: cookie.value for cookie in cookie_jar})
     return validate(raw)
 
 
 def from_paste() -> CookieSet:
     """Interactively read pasted cookies from stdin and return a validated set."""
     console = Console(stderr=True)
-    console.print(
-        "[bold]Paste cookies from your browser, then press Enter on an empty line to finish.[/]"
-    )
-    console.print("  Accepted formats:")
-    console.print(f"    - JSON from console:  [dim]{BROWSER_JS.splitlines()[-1]}[/]")
-    console.print("    - Raw Cookie header:  [dim]Cookie: k1=v1; k2=v2[/]")
-    console.print('    - Extension export:   [dim][{"name":"k","value":"v",...}, ...][/]')
-    console.print()
+    _print_paste_instructions(console)
 
-    lines: list[str] = []
-    while True:
-        try:
-            line = Prompt.ask("[green]>[/]" if not lines else "[green] [/]")
-        except EOFError:
-            break
-        if not line.strip():
-            break
-        lines.append(line)
-
+    lines = _read_pasted_lines()
     raw = "\n".join(lines).strip()
     if not raw:
         raise CookieError("Empty input — no cookies provided.")
@@ -196,37 +260,50 @@ def from_header(header_str: str) -> CookieSet:
     return validate(cookies)
 
 
+def _warn_on_suspicious_cookies(cookies: dict[str, str]) -> None:
+    """Emit soft warnings for sparse or empty-valued cookie dicts."""
+    if len(cookies) < _MIN_EXPECTED_COOKIES:
+        logger.warning(
+            "Only %d cookie(s) found — extraction may be incomplete.",
+            len(cookies),
+        )
+
+    empty_keys = [name for name, cookie_value in cookies.items() if not cookie_value]
+    if empty_keys:
+        logger.warning("Empty values for cookies: %s", ", ".join(empty_keys))
+
+
+def _validation_error_message(cookies: dict[str, str], exc: ValueError) -> str:
+    """Build a user-facing message for a failed ``CookieSet`` validation."""
+    missing = REQUIRED_COOKIES - cookies.keys()
+    if missing:
+        missing_names = ", ".join(sorted(missing))
+        return f"Missing required cookies: {missing_names}"
+    return str(exc)
+
+
 def validate(cookies: dict[str, str]) -> CookieSet:
     """Validate a raw cookie dict and return a ``CookieSet``."""
     if not cookies:
         raise CookieError("No cookies provided.")
 
     # Log soft warnings before hard validation.
-    if len(cookies) < 3:
-        logger.warning(
-            "Only %d cookie(s) found — extraction may be incomplete.",
-            len(cookies),
-        )
-
-    empty_keys = [k for k, v in cookies.items() if not v]
-    if empty_keys:
-        logger.warning("Empty values for cookies: %s", ", ".join(empty_keys))
+    _warn_on_suspicious_cookies(cookies)
 
     try:
         return CookieSet(cookies=cookies)
     except ValueError as exc:
-        missing = REQUIRED_COOKIES - cookies.keys()
-        msg = f"Missing required cookies: {', '.join(sorted(missing))}" if missing else str(exc)
-        raise CookieError(msg) from exc
+        raise CookieError(_validation_error_message(cookies, exc)) from exc
 
 
 def save(cookies: CookieSet, output: Path) -> None:
     """Write a validated cookie set to a JSON file with restricted permissions."""
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    output.write_text(json.dumps(cookies.cookies, indent=2) + "\n", encoding="utf-8")
+    payload = f"{json.dumps(cookies.cookies, indent=2)}\n"
+    output.write_text(payload, encoding="utf-8")
     try:
-        output.chmod(0o600)
+        output.chmod(_OWNER_ONLY_MODE)
     except OSError:
         logger.debug("Could not set permissions on %s", output)
 

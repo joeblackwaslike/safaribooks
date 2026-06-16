@@ -7,7 +7,8 @@ import logging
 import re
 import stat
 import warnings
-from typing import Any
+from pathlib import Path
+from typing import Any, NamedTuple
 
 import httpx
 
@@ -26,6 +27,110 @@ logger = logging.getLogger(__name__)
 _COOKIE_FLOAT_MAX_AGE_RE = re.compile(r"(max-age=\d*\.\d*)", re.IGNORECASE)
 
 _MAX_REDIRECTS = 10
+_HTTP_OK = 200
+_ERROR_BODY_PREVIEW = 500
+_DEFAULT_TIMEOUT = 30.0
+_CONNECT_TIMEOUT = 10.0
+_AUTH_FAILURE_CODES = (401, 403)
+_TRANSIENT_HTTP_ERRORS = (
+    httpx.ConnectError,
+    httpx.ConnectTimeout,
+    httpx.ReadTimeout,
+    httpx.PoolTimeout,
+)
+
+
+def _body_preview(response: httpx.Response) -> str:
+    """Return a truncated preview of a response body for error messages."""
+    return response.text[:_ERROR_BODY_PREVIEW]
+
+
+def _parse_float_max_age_morsel(morsel: str) -> tuple[str, str] | None:
+    """Parse a ``Set-Cookie`` morsel that carries a float ``max-age``.
+
+    Returns the ``(key, value)`` pair for morsels matching the float
+    ``max-age`` quirk, or ``None`` when the morsel does not match or is
+    malformed (the latter case is logged at debug level).
+    """
+    if not _COOKIE_FLOAT_MAX_AGE_RE.search(morsel):
+        return None
+    cookie_pair = morsel.split(";")[0]
+    try:
+        cookie_key, cookie_value = cookie_pair.split("=", maxsplit=1)
+    except ValueError:
+        logger.debug("Malformed Set-Cookie morsel: %s", morsel)
+        return None
+    return cookie_key.strip(), cookie_value.strip()
+
+
+def _read_cookie_file(cookies_path: Path) -> dict[str, str]:
+    """Read and validate a JSON cookie file during session refresh.
+
+    Raises :class:`AuthenticationError` when the file cannot be read or
+    does not contain a JSON object.
+    """
+    try:
+        raw_text = cookies_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise AuthenticationError(f"Session expired and could not reload cookies: {exc}") from exc
+
+    try:
+        fresh = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise AuthenticationError(f"Session expired and could not reload cookies: {exc}") from exc
+
+    if not isinstance(fresh, dict):
+        raise AuthenticationError("Cookie file does not contain a JSON object.")
+    return fresh
+
+
+def _load_cookie_dict(cookies_path: Path) -> dict[str, str]:
+    """Read, parse, and validate the cookie file during initialisation.
+
+    Raises :class:`CookieError` when the file cannot be read, is not valid
+    JSON, or does not contain a JSON object.
+    """
+    try:
+        raw_text = cookies_path.read_text(encoding="utf-8")
+    except OSError as exc:
+        msg = f"Unable to read cookie file ({cookies_path}): {exc}"
+        raise CookieError(msg) from exc
+
+    try:
+        cookie_data: Any = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        msg = (
+            f"Cookie file is corrupted ({cookies_path}): {exc}\n"
+            "Re-extract with: safaribooks retrieve-cookies"
+        )
+        raise CookieError(msg) from exc
+
+    if not isinstance(cookie_data, dict):
+        msg = f"Expected a JSON object in {cookies_path}, got {type(cookie_data).__name__}"
+        raise CookieError(msg)
+    return cookie_data
+
+
+class _PostPayload(NamedTuple):
+    """Bundled POST body: form-encoded ``data`` and/or a JSON payload."""
+
+    form_data: dict[str, Any] | None = None
+    json_payload: dict[str, Any] | None = None
+
+    def to_request_kwargs(self) -> dict[str, Any]:
+        """Build the keyword arguments passed to the underlying HTTP request."""
+        if self.json_payload is not None:
+            return {"json": self.json_payload}
+        if self.form_data is not None:
+            return {"data": self.form_data}
+        return {}
+
+
+def _is_auth_failure(response: httpx.Response, redirect_location: str) -> bool:
+    """Return ``True`` when the response indicates an authentication failure."""
+    if response.status_code in _AUTH_FAILURE_CODES:
+        return True
+    return response.is_redirect and "/login" in redirect_location
 
 
 class ApiClient:
@@ -60,7 +165,7 @@ class ApiClient:
             cookies=httpx.Cookies(self._cookie_dict),
             follow_redirects=False,
             verify=not self.config.ssl_skip,
-            timeout=httpx.Timeout(30.0, connect=10.0),
+            timeout=httpx.Timeout(_DEFAULT_TIMEOUT, connect=_CONNECT_TIMEOUT),
         )
         return self
 
@@ -149,7 +254,11 @@ class ApiClient:
             When the session is expired and cannot be refreshed.
 
         """
-        return await self._request(url, is_post=True, data=data, json_payload=json_payload)
+        return await self._request(
+            url,
+            is_post=True,
+            payload=_PostPayload(form_data=data, json_payload=json_payload),
+        )
 
     async def get_json(self, url: str) -> dict[str, Any]:
         """GET a URL and parse the JSON response.
@@ -185,7 +294,7 @@ class ApiClient:
         """
         response = await self.get(PROFILE_URL)
 
-        if response.status_code != 200 or "/login" in str(response.url):
+        if response.status_code != _HTTP_OK or "/login" in str(response.url):
             raise AuthenticationError("Unable to access profile page -- authentication failed.")
 
         if 'user_type":"Expired"' in response.text:
@@ -212,8 +321,8 @@ class ApiClient:
             "Use cookie-based authentication instead."
         )
 
-    @staticmethod
-    def parse_cred(cred: str) -> tuple[str, str] | None:
+    @classmethod
+    def parse_cred(cls, cred: str) -> tuple[str, str] | None:
         """Parse an ``email:password`` credential string.
 
         Returns:
@@ -242,7 +351,7 @@ class ApiClient:
         cookies_path = self.config.cookies_file
         cookies_path.parent.mkdir(parents=True, exist_ok=True)
         cookies_path.write_text(
-            json.dumps(dict(self.client.cookies), indent=2) + "\n",
+            f"{json.dumps(dict(self.client.cookies), indent=2)}\n",
             encoding="utf-8",
         )
         try:
@@ -250,6 +359,77 @@ class ApiClient:
         except OSError:
             logger.debug("Could not restrict permissions on %s", cookies_path)
         logger.debug("Saved cookies to %s", cookies_path)
+
+    # ------------------------------------------------------------------
+    # Session keepalive
+    # ------------------------------------------------------------------
+
+    async def start_keepalive(self) -> None:
+        """Start a background task that pings the profile endpoint periodically."""
+        interval = self.config.keepalive_interval
+        if interval <= 0:
+            return
+        self._keepalive_task = asyncio.create_task(self._keepalive_loop(interval))
+        logger.debug("Session keepalive started (every %ds).", interval)
+
+    async def stop_keepalive(self) -> None:
+        """Cancel the keepalive background task if running."""
+        task = self._keepalive_task
+        if task is not None and not task.done():
+            task.cancel()
+            with contextlib.suppress(asyncio.CancelledError):
+                await task
+            logger.debug("Session keepalive stopped.")
+
+    # ------------------------------------------------------------------
+    # JSON response parsing
+    # ------------------------------------------------------------------
+
+    def parse_json_response(self, response: httpx.Response) -> dict[str, Any]:
+        """Parse a JSON API response with validation.
+
+        Parameters
+        ----------
+        response:
+            The HTTP response to parse.
+
+        Returns:
+        -------
+        dict[str, Any]
+            The parsed JSON body.
+
+        Raises:
+        ------
+        ApiError
+            When the response status is non-200, the content type is
+            unexpected, or the body is not valid JSON.
+
+        """
+        preview = _body_preview(response)
+        if response.status_code != _HTTP_OK:
+            msg = f"API returned status {response.status_code}: {preview}"
+            logger.warning(msg)
+            raise ApiError(msg)
+
+        content_type = response.headers.get("Content-Type", "")
+        if "json" not in content_type and "javascript" not in content_type:
+            msg = f"Unexpected content type {content_type!r}: {preview}"
+            logger.warning(msg)
+            raise ApiError(msg)
+
+        try:
+            parsed = response.json()
+        except (ValueError, json.JSONDecodeError) as exc:
+            msg = f"JSON parse error: {preview}"
+            logger.warning(msg)
+            raise ApiError(msg) from exc
+        else:
+            parsed_body: dict[str, Any] = parsed
+            return parsed_body
+
+    # ------------------------------------------------------------------
+    # Cookie management
+    # ------------------------------------------------------------------
 
     def _handle_cookie_update(self, set_cookie_headers: list[str]) -> None:
         """Update client cookies from ``Set-Cookie`` response headers.
@@ -260,13 +440,10 @@ class ApiClient:
         """
         before = dict(self.client.cookies)
         for morsel in set_cookie_headers:
-            if _COOKIE_FLOAT_MAX_AGE_RE.search(morsel):
-                try:
-                    cookie_pair = morsel.split(";")[0]
-                    key, value = cookie_pair.split("=", maxsplit=1)
-                    self.client.cookies.set(key.strip(), value.strip())
-                except ValueError:
-                    logger.debug("Malformed Set-Cookie morsel: %s", morsel)
+            parsed = _parse_float_max_age_morsel(morsel)
+            if parsed is not None:
+                cookie_key, cookie_value = parsed
+                self.client.cookies.set(cookie_key, cookie_value)
         if dict(self.client.cookies) != before:
             self.save_cookies()
 
@@ -285,36 +462,27 @@ class ApiClient:
 
         cookies_path = self.config.cookies_file
         if not cookies_path.is_file():
-            if self._try_browser_refresh():
-                return True
-            raise AuthenticationError(
+            return self._refresh_from_browser_or_fail(
                 f"Session expired and cookie file not found: {cookies_path}\n"
                 "Re-extract cookies with: safaribooks retrieve-cookies"
             )
 
-        try:
-            raw = cookies_path.read_text(encoding="utf-8")
-            fresh = json.loads(raw)
-        except (json.JSONDecodeError, OSError) as exc:
-            raise AuthenticationError(
-                f"Session expired and could not reload cookies: {exc}"
-            ) from exc
-
-        if not isinstance(fresh, dict):
-            raise AuthenticationError("Cookie file does not contain a JSON object.")
-
+        fresh = _read_cookie_file(cookies_path)
         if fresh != dict(self.client.cookies):
             self.client.cookies.update(fresh)
             logger.info("Reloaded cookies from disk.")
             return True
 
-        if self._try_browser_refresh():
-            return True
-
-        raise AuthenticationError(
+        return self._refresh_from_browser_or_fail(
             "Session expired. Cookies on disk are identical to the expired session.\n"
             "Re-extract cookies with: safaribooks retrieve-cookies"
         )
+
+    def _refresh_from_browser_or_fail(self, failure_message: str) -> bool:
+        """Attempt a browser refresh, raising ``AuthenticationError`` on failure."""
+        if self._try_browser_refresh():
+            return True
+        raise AuthenticationError(failure_message)
 
     def _try_browser_refresh(self) -> bool:
         """Try to re-extract cookies from the browser.
@@ -342,87 +510,18 @@ class ApiClient:
         logger.info("Auto-refreshed cookies from %s.", browser)
         return True
 
-    # ------------------------------------------------------------------
-    # Session keepalive
-    # ------------------------------------------------------------------
-
-    async def start_keepalive(self) -> None:
-        """Start a background task that pings the profile endpoint periodically."""
-        interval = self.config.keepalive_interval
-        if interval <= 0:
-            return
-        self._keepalive_task = asyncio.create_task(self._keepalive_loop(interval))
-        logger.debug("Session keepalive started (every %ds).", interval)
-
-    async def stop_keepalive(self) -> None:
-        """Cancel the keepalive background task if running."""
-        task = self._keepalive_task
-        if task is not None and not task.done():
-            task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
-                await task
-            logger.debug("Session keepalive stopped.")
-
     async def _keepalive_loop(self, interval: int) -> None:
         """Periodically hit the profile endpoint to extend the session."""
         while True:
             await asyncio.sleep(interval)
             try:
                 await self.get(PROFILE_URL, update_cookies=True)
-                logger.debug("Keepalive ping OK.")
             except asyncio.CancelledError:
                 raise
             except Exception as exc:
                 logger.debug("Keepalive ping failed: %s", exc)
-
-    # ------------------------------------------------------------------
-    # JSON response parsing
-    # ------------------------------------------------------------------
-
-    def parse_json_response(self, response: httpx.Response) -> dict[str, Any]:
-        """Parse a JSON API response with validation.
-
-        Parameters
-        ----------
-        response:
-            The HTTP response to parse.
-
-        Returns:
-        -------
-        dict[str, Any]
-            The parsed JSON body.
-
-        Raises:
-        ------
-        ApiError
-            When the response status is non-200, the content type is
-            unexpected, or the body is not valid JSON.
-
-        """
-        if response.status_code != 200:
-            msg = f"API returned status {response.status_code}: {response.text[:500]}"
-            logger.warning(msg)
-            raise ApiError(msg)
-
-        content_type = response.headers.get("Content-Type", "")
-        if "json" not in content_type and "javascript" not in content_type:
-            msg = f"Unexpected content type {content_type!r}: {response.text[:500]}"
-            logger.warning(msg)
-            raise ApiError(msg)
-
-        try:
-            parsed = response.json()
-        except (ValueError, json.JSONDecodeError) as exc:
-            msg = f"JSON parse error: {response.text[:500]}"
-            logger.warning(msg)
-            raise ApiError(msg) from exc
-        else:
-            result: dict[str, Any] = parsed
-            return result
-
-    # ------------------------------------------------------------------
-    # Internal helpers
-    # ------------------------------------------------------------------
+            else:
+                logger.debug("Keepalive ping OK.")
 
     def _load_cookies(self) -> dict[str, str]:
         """Load cookies from the configured JSON file and return as a dict.
@@ -438,23 +537,7 @@ class ApiClient:
             )
             raise CookieError(msg)
 
-        try:
-            raw = cookies_path.read_text(encoding="utf-8")
-            cookie_data: Any = json.loads(raw)
-        except json.JSONDecodeError as exc:
-            msg = (
-                f"Cookie file is corrupted ({cookies_path}): {exc}\n"
-                "Re-extract with: safaribooks retrieve-cookies"
-            )
-            raise CookieError(msg) from exc
-        except OSError as exc:
-            msg = f"Unable to read cookie file ({cookies_path}): {exc}"
-            raise CookieError(msg) from exc
-
-        if not isinstance(cookie_data, dict):
-            msg = f"Expected a JSON object in {cookies_path}, got {type(cookie_data).__name__}"
-            raise CookieError(msg)
-
+        cookie_data = _load_cookie_dict(cookies_path)
         logger.debug("Loaded %d cookies from %s", len(cookie_data), cookies_path)
         return cookie_data
 
@@ -467,8 +550,7 @@ class ApiClient:
         url: str,
         *,
         is_post: bool = False,
-        data: dict[str, Any] | None = None,
-        json_payload: dict[str, Any] | None = None,
+        payload: _PostPayload | None = None,
         update_cookies: bool = True,
         _redirect_count: int = 0,
     ) -> httpx.Response:
@@ -478,46 +560,30 @@ class ApiClient:
             raise ApiError(msg)
 
         method = "POST" if is_post else "GET"
-        kwargs: dict[str, Any] = {}
-        if is_post:
-            if json_payload is not None:
-                kwargs["json"] = json_payload
-            elif data is not None:
-                kwargs["data"] = data
-
-        response: httpx.Response = await self._do_request(method, url, **kwargs)
+        request_kwargs = payload.to_request_kwargs() if is_post and payload else {}
+        response: httpx.Response = await self._do_request(method, url, **request_kwargs)
 
         if update_cookies:
             self._handle_cookie_update(response.headers.get_list("set-cookie"))
 
-        logger.debug(
-            "%s %s -> %d",
-            method,
-            url,
-            response.status_code,
-        )
+        logger.debug("%s %s -> %d", method, url, response.status_code)
+        redirect_location = response.headers.get("location", "")
 
         # Handle auth failures -- attempt cookie refresh then retry once.
-        redirect_location = response.headers.get("location", "")
-        is_auth_failure = response.status_code in (401, 403) or (
-            response.is_redirect and "/login" in redirect_location
-        )
-        if is_auth_failure and self._try_cookie_refresh():
+        if _is_auth_failure(response, redirect_location) and self._try_cookie_refresh():
             self._cookie_refresh_attempted = False
             return await self._request(
                 url,
                 is_post=is_post,
-                data=data,
-                json_payload=json_payload,
+                payload=payload,
                 update_cookies=update_cookies,
                 _redirect_count=_redirect_count,
             )
 
         # Follow redirects manually (mirrors legacy behaviour).
         if response.is_redirect and redirect_location:
-            next_url = str(response.url.join(redirect_location))
             return await self._request(
-                next_url,
+                str(response.url.join(redirect_location)),
                 is_post=is_post,
                 update_cookies=update_cookies,
                 _redirect_count=_redirect_count + 1,
@@ -531,7 +597,7 @@ class ApiClient:
         await self._rate_limiter.acquire()
         try:
             response = await self.client.request(method, url, **kwargs)
-        except (httpx.ConnectError, httpx.ConnectTimeout, httpx.ReadTimeout, httpx.PoolTimeout):
+        except _TRANSIENT_HTTP_ERRORS:
             raise
         except httpx.HTTPError as exc:
             msg = f"Request failed for {url}: {exc}"

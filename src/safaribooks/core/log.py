@@ -4,14 +4,103 @@ import asyncio
 import json
 import logging
 import sys
-from collections.abc import MutableMapping
+from collections.abc import Awaitable, Callable, MutableMapping
 from pathlib import Path
 from typing import Any
 
 import structlog
-from structlog.types import EventDict, Processor
+from structlog.types import EventDict
 
 _logger = logging.getLogger(__name__)
+
+_SHUTDOWN_TIMEOUT = 5.0
+_MIN_FLUSH_TIMEOUT = 0.01
+_NEWLINE = "\n"
+
+_Record = dict[str, Any]
+_WriteBatch = Callable[[list[_Record]], Awaitable[None]]
+
+
+def _to_json_line(record: MutableMapping[str, Any]) -> str:
+    """Serialize a record to a single newline-terminated JSON line."""
+    return f"{json.dumps(dict(record), default=str)}{_NEWLINE}"
+
+
+class _BatchWorker:
+    """Drains a queue into batches and flushes them via a write callback.
+
+    The worker is decoupled from any specific handler: it receives the queue,
+    batching configuration, shutdown signal, and write callback explicitly so
+    that it never reaches into another object's internals.
+    """
+
+    def __init__(
+        self,
+        queue: "asyncio.Queue[_Record]",
+        batch_size: int,
+        flush_interval: float,
+        shutdown_event: asyncio.Event,
+        write_batch: _WriteBatch,
+    ) -> None:
+        self._queue = queue
+        self._batch_size = batch_size
+        self._flush_interval = flush_interval
+        self._shutdown_event = shutdown_event
+        self._write_batch = write_batch
+        self._batch: list[_Record] = []
+        self._last_flush: float
+
+    async def run(self) -> None:
+        """Process queued records until shutdown, flushing any remainder."""
+        self._last_flush = asyncio.get_running_loop().time()
+        try:
+            await self._consume()
+        except BaseException:
+            await self._flush_remaining()
+            raise
+        else:
+            await self._flush_remaining()
+
+    async def _flush_remaining(self) -> None:
+        """Drain the queue and write whatever records are still pending."""
+        self._drain()
+        if self._batch:
+            await self._write_batch(self._batch)
+
+    async def _consume(self) -> None:
+        """Loop over the queue until the shutdown event is set."""
+        while not self._shutdown_event.is_set():
+            record = await self._await_record()
+            if record is None:
+                await self._maybe_flush(force=True)
+            else:
+                self._batch.append(record)
+                await self._maybe_flush(force=False)
+
+    async def _await_record(self) -> _Record | None:
+        """Wait for a record, or ``None`` when the flush interval elapses."""
+        elapsed = asyncio.get_running_loop().time() - self._last_flush
+        timeout = max(self._flush_interval - elapsed, _MIN_FLUSH_TIMEOUT)
+        try:
+            return await asyncio.wait_for(self._queue.get(), timeout=timeout)
+        except TimeoutError:
+            return None
+
+    async def _maybe_flush(self, *, force: bool) -> None:
+        """Flush when forced by the interval or the batch is full."""
+        ready = force or len(self._batch) >= self._batch_size
+        if ready and self._batch:
+            await self._write_batch(self._batch)
+            self._batch.clear()
+            self._last_flush = asyncio.get_running_loop().time()
+
+    def _drain(self) -> None:
+        """Move any remaining queued records into the pending batch."""
+        while not self._queue.empty():
+            try:
+                self._batch.append(self._queue.get_nowait())
+            except asyncio.QueueEmpty:
+                return
 
 
 class AsyncQueueHandler:
@@ -40,7 +129,14 @@ class AsyncQueueHandler:
     async def start(self) -> None:
         """Start the background worker task."""
         self._shutdown_event.clear()
-        self._worker_task = asyncio.create_task(self._worker())
+        worker = _BatchWorker(
+            self.queue,
+            self.batch_size,
+            self.flush_interval,
+            self._shutdown_event,
+            self._write_batch,
+        )
+        self._worker_task = asyncio.create_task(worker.run())
 
     async def stop(self) -> None:
         """Gracefully shutdown: flush remaining logs and stop worker."""
@@ -48,7 +144,7 @@ class AsyncQueueHandler:
 
         if self._worker_task:
             try:
-                await asyncio.wait_for(self._worker_task, timeout=5.0)
+                await asyncio.wait_for(self._worker_task, timeout=_SHUTDOWN_TIMEOUT)
             except TimeoutError:
                 _logger.exception("Async log handler shutdown timeout")
                 self._worker_task.cancel()
@@ -67,52 +163,12 @@ class AsyncQueueHandler:
         try:
             self.queue.put_nowait(dict(record))
         except asyncio.QueueFull:
-            sys.stderr.write(json.dumps(dict(record), default=str) + "\n")
-
-    async def _worker(self) -> None:
-        """Background worker that processes batched logs."""
-        batch: list[dict[str, Any]] = []
-        last_flush = asyncio.get_running_loop().time()
-
-        try:
-            while not self._shutdown_event.is_set():
-                try:
-                    timeout = self.flush_interval - (asyncio.get_running_loop().time() - last_flush)
-                    timeout = max(timeout, 0.01)
-
-                    record = await asyncio.wait_for(
-                        self.queue.get(),
-                        timeout=timeout,
-                    )
-                    batch.append(record)
-
-                except TimeoutError:
-                    if batch:
-                        await self._write_batch(batch)
-                        batch.clear()
-                        last_flush = asyncio.get_running_loop().time()
-                    continue
-
-                if len(batch) >= self.batch_size:
-                    await self._write_batch(batch)
-                    batch.clear()
-                    last_flush = asyncio.get_running_loop().time()
-
-        finally:
-            while not self.queue.empty():
-                try:
-                    record = self.queue.get_nowait()
-                    batch.append(record)
-                except asyncio.QueueEmpty:
-                    break
-
-            if batch:
-                await self._write_batch(batch)
+            sys.stderr.write(_to_json_line(record))
 
     async def _write_batch(self, batch: list[dict[str, Any]]) -> None:
         """Write a batch of logs (override for file/network I/O)."""
         for record in batch:
-            sys.stdout.write(json.dumps(record, default=str) + "\n")
+            sys.stdout.write(_to_json_line(record))
         sys.stdout.flush()
 
 
@@ -136,27 +192,27 @@ class AsyncFileHandler(AsyncQueueHandler):
         super().__init__(queue_size, batch_size, flush_interval)
         self.filepath = Path(filepath)
         self.filepath.parent.mkdir(parents=True, exist_ok=True)
-        self._file: Any = None
+        self._stream: Any = None
 
     async def start(self) -> None:
         """Open file and start worker."""
-        self._file = self.filepath.open("a", buffering=1)
+        self._stream = self.filepath.open("a", buffering=1)
         await super().start()
 
     async def stop(self) -> None:
         """Stop worker and close file."""
         await super().stop()
-        if self._file:
-            self._file.close()
+        if self._stream:
+            self._stream.close()
 
     async def _write_batch(self, batch: list[dict[str, Any]]) -> None:
         """Write batch to file."""
-        if not self._file:
+        if not self._stream:
             return
 
         for record in batch:
-            self._file.write(json.dumps(record, default=str) + "\n")
-        self._file.flush()
+            self._stream.write(_to_json_line(record))
+        self._stream.flush()
 
 
 class JSONRenderer:
@@ -190,6 +246,19 @@ class JSONRenderer:
         return output
 
 
+class _QueueRenderer:
+    """Structlog processor that routes events to async queue handlers."""
+
+    def __init__(self, handlers: list[AsyncQueueHandler]) -> None:
+        self._handlers = handlers
+
+    def __call__(self, logger: Any, name: str, event_dict: EventDict) -> str:
+        """Emit the event to every registered handler."""
+        for queue_handler in self._handlers:
+            queue_handler.emit(event_dict)
+        return ""
+
+
 def configure_async_logging(
     level: int = logging.INFO,
 ) -> AsyncQueueHandler:
@@ -210,7 +279,7 @@ def configure_async_logging(
             structlog.processors.add_log_level,
             structlog.processors.dict_tracebacks,
             JSONRenderer(include_timestamp=True),
-            _queue_renderer(handlers),
+            _QueueRenderer(handlers),
         ],
         context_class=dict,
         logger_factory=structlog.PrintLoggerFactory(),
@@ -220,18 +289,3 @@ def configure_async_logging(
     logging.basicConfig(level=level, stream=sys.stderr, force=True)
 
     return handlers[0]
-
-
-def _queue_renderer(handlers: list[AsyncQueueHandler]) -> Processor:
-    """Processor that routes logs to async queue handlers."""
-
-    def renderer(
-        logger: Any,
-        name: str,
-        event_dict: EventDict,
-    ) -> str:
-        for handler in handlers:
-            handler.emit(event_dict)
-        return ""
-
-    return renderer

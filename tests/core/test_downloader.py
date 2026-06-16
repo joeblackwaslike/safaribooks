@@ -5,6 +5,7 @@ from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 
+from safaribooks.core import downloader as dl
 from safaribooks.core.config import AppConfig
 from safaribooks.core.downloader import (
     BookDownloader,
@@ -24,6 +25,10 @@ from safaribooks.core.models import (
 )
 
 BOOK_ID = "9781234567890"
+
+_ROOT_HTML = "<r/>"
+_OPF_BYTES = b"<opf/>"
+_NCX_BYTES = b"<ncx/>"
 
 
 # ---------------------------------------------------------------------------
@@ -60,7 +65,7 @@ def _make_chapter(
         content_url=f"https://example.com/{filename}",
         asset_base_url="https://example.com/files",
         images=images or [],
-        stylesheets=[Stylesheet(url=u) for u in (stylesheets or [])],
+        stylesheets=[Stylesheet(url=href) for href in (stylesheets or [])],
         site_styles=site_styles or [],
     )
 
@@ -83,6 +88,10 @@ def _make_parse_result(
     )
 
 
+def _make_downloader(config: AppConfig, *, callback=None) -> BookDownloader:
+    return BookDownloader(config, BOOK_ID, progress_callback=callback)
+
+
 @pytest.fixture
 def config(tmp_path) -> AppConfig:
     return AppConfig(
@@ -90,6 +99,68 @@ def config(tmp_path) -> AppConfig:
         output_dir=tmp_path / "Books",
         library_dir=tmp_path / "library",
     )
+
+
+@pytest.fixture
+def downloader(config: AppConfig) -> BookDownloader:
+    return _make_downloader(config)
+
+
+def _make_api_client() -> MagicMock:
+    client = MagicMock(name="ApiClient")
+    client.check_login = AsyncMock(return_value=True)
+    client.start_keepalive = AsyncMock()
+    client.stop_keepalive = AsyncMock()
+    client.save_cookies = MagicMock()
+    client.get_json = AsyncMock(return_value={})
+    return client
+
+
+def _make_api_factory(client: MagicMock) -> MagicMock:
+    api_ctx = MagicMock(name="ApiClientCtx")
+    api_ctx.__aenter__ = AsyncMock(return_value=client)
+    api_ctx.__aexit__ = AsyncMock(return_value=False)
+    return MagicMock(return_value=api_ctx)
+
+
+class _SequentialParse:
+    """Side effect that returns queued parse results, then a default."""
+
+    def __init__(self, parse_results: list[ParseResult] | None) -> None:
+        self._pending = list(parse_results or [])
+
+    def __call__(self, *args, **kwargs) -> ParseResult:
+        return self._pending.pop(0) if self._pending else _make_parse_result()
+
+
+def _sequential_parser(parse_results: list[ParseResult] | None) -> MagicMock:
+    return MagicMock(side_effect=_SequentialParse(parse_results))
+
+
+def _patch_metadata(monkeypatch, *, book_info: BookInfo, chapters: list[Chapter]):
+    monkeypatch.setattr(dl, "fetch_book_info", AsyncMock(return_value=book_info))
+    monkeypatch.setattr(dl, "enrich_book_metadata", AsyncMock(return_value=book_info))
+    monkeypatch.setattr(dl, "fetch_chapters", AsyncMock(return_value=chapters))
+
+
+def _patch_chapter_pipeline(monkeypatch, *, parse_results):
+    monkeypatch.setattr(dl, "fetch_chapter_html", AsyncMock(return_value="<root/>"))
+    monkeypatch.setattr(dl, "parse_chapter_html", _sequential_parser(parse_results))
+    monkeypatch.setattr(dl, "write_chapter_html", MagicMock())
+
+
+def _patch_asset_downloads(monkeypatch, mocks, *, download_fonts_return):
+    monkeypatch.setattr(dl, "download_css", AsyncMock())
+    monkeypatch.setattr(dl, "download_fonts", AsyncMock(return_value=download_fonts_return or []))
+    mocks["download_images"] = AsyncMock()
+    monkeypatch.setattr(dl, "download_images", mocks["download_images"])
+    mocks["download_videos"] = AsyncMock()
+    monkeypatch.setattr(dl, "download_videos", mocks["download_videos"])
+
+
+def _patch_rendering(monkeypatch):
+    monkeypatch.setattr(dl, "render_content_opf", MagicMock(return_value="<opf/>"))
+    monkeypatch.setattr(dl, "render_toc_ncx", AsyncMock(return_value="<ncx/>"))
 
 
 def _patch_pipeline(
@@ -105,59 +176,21 @@ def _patch_pipeline(
 
     Returns a dict of the installed mocks for assertions.
     """
-    import safaribooks.core.downloader as dl
-
     mocks: dict = {}
 
-    # --- ApiClient async context manager ---
-    client = MagicMock(name="ApiClient")
-    client.check_login = AsyncMock(return_value=True)
-    client.start_keepalive = AsyncMock()
-    client.stop_keepalive = AsyncMock()
-    client.save_cookies = MagicMock()
-    client.get_json = AsyncMock(return_value={})
-
-    api_ctx = MagicMock(name="ApiClientCtx")
-    api_ctx.__aenter__ = AsyncMock(return_value=client)
-    api_ctx.__aexit__ = AsyncMock(return_value=False)
-    api_factory = MagicMock(return_value=api_ctx)
-    monkeypatch.setattr(dl, "ApiClient", api_factory)
+    client = _make_api_client()
     mocks["client"] = client
-    mocks["api_factory"] = api_factory
+    mocks["api_factory"] = _make_api_factory(client)
+    monkeypatch.setattr(dl, "ApiClient", mocks["api_factory"])
 
-    monkeypatch.setattr(dl, "fetch_book_info", AsyncMock(return_value=book_info))
-    monkeypatch.setattr(dl, "enrich_book_metadata", AsyncMock(return_value=book_info))
-    monkeypatch.setattr(dl, "fetch_chapters", AsyncMock(return_value=chapters))
+    _patch_metadata(monkeypatch, book_info=book_info, chapters=chapters)
 
-    fetch_cover_mock = AsyncMock(return_value=fetch_default_cover_return)
-    monkeypatch.setattr(dl, "fetch_default_cover", fetch_cover_mock)
-    mocks["fetch_default_cover"] = fetch_cover_mock
+    mocks["fetch_default_cover"] = AsyncMock(return_value=fetch_default_cover_return)
+    monkeypatch.setattr(dl, "fetch_default_cover", mocks["fetch_default_cover"])
 
-    # Chapter fetch/parse
-    monkeypatch.setattr(dl, "fetch_chapter_html", AsyncMock(return_value="<root/>"))
-    results = list(parse_results or [])
-
-    def _parse(*args, **kwargs):
-        return results.pop(0) if results else _make_parse_result()
-
-    monkeypatch.setattr(dl, "parse_chapter_html", MagicMock(side_effect=_parse))
-    monkeypatch.setattr(dl, "write_chapter_html", MagicMock())
-
-    # Asset downloads
-    monkeypatch.setattr(dl, "download_css", AsyncMock())
-    monkeypatch.setattr(
-        dl, "download_fonts", AsyncMock(return_value=download_fonts_return or [])
-    )
-    download_images_mock = AsyncMock()
-    monkeypatch.setattr(dl, "download_images", download_images_mock)
-    mocks["download_images"] = download_images_mock
-    download_videos_mock = AsyncMock()
-    monkeypatch.setattr(dl, "download_videos", download_videos_mock)
-    mocks["download_videos"] = download_videos_mock
-
-    # EPUB rendering — real epub build so a real file is produced
-    monkeypatch.setattr(dl, "render_content_opf", MagicMock(return_value="<opf/>"))
-    monkeypatch.setattr(dl, "render_toc_ncx", AsyncMock(return_value="<ncx/>"))
+    _patch_chapter_pipeline(monkeypatch, parse_results=parse_results)
+    _patch_asset_downloads(monkeypatch, mocks, download_fonts_return=download_fonts_return)
+    _patch_rendering(monkeypatch)
 
     return mocks
 
@@ -216,7 +249,7 @@ class TestFetchPlaylistBookIds:
         ids = await fetch_playlist_book_ids(client, "pl-1")
         assert ids == ["9781234567890", "1112223334445"]
 
-    async def test_skips_non_matching_playlists_before_match(self):
+    async def test_skips_non_matching_before_match(self):
         # First entry does not match -> loop continues to the matching one.
         client = MagicMock()
         client.get_json = AsyncMock(
@@ -279,23 +312,21 @@ class TestFetchPlaylistBookIds:
 class TestProgressHelpers:
     def test_notify_progress_invokes_callback(self, config):
         cb = MagicMock()
-        d = BookDownloader(config, BOOK_ID, progress_callback=cb)
-        d._notify_progress("chapters", 1, 5)
+        downloader = _make_downloader(config, callback=cb)
+        downloader._notify_progress("chapters", 1, 5)
         cb.assert_called_once_with("chapters", 1, 5)
 
-    def test_notify_progress_no_callback_is_noop(self, config):
-        d = BookDownloader(config, BOOK_ID)
+    def test_notify_progress_no_callback_is_noop(self, downloader):
         # Should not raise.
-        d._notify_progress("chapters", 1, 5)
+        downloader._notify_progress("chapters", 1, 5)
 
-    def test_make_asset_callback_none_without_callback(self, config):
-        d = BookDownloader(config, BOOK_ID)
-        assert d._make_asset_callback("css") is None
+    def test_make_asset_callback_none_no_callback(self, downloader):
+        assert downloader._make_asset_callback("css") is None
 
     def test_make_asset_callback_bridges_arg_order(self, config):
         cb = MagicMock()
-        d = BookDownloader(config, BOOK_ID, progress_callback=cb)
-        bridge = d._make_asset_callback("images")
+        downloader = _make_downloader(config, callback=cb)
+        bridge = downloader._make_asset_callback("images")
         assert bridge is not None
         # Asset callbacks are (total, completed); public API is (stage, current, total).
         bridge(10, 3)
@@ -307,89 +338,95 @@ class TestProgressHelpers:
 # ---------------------------------------------------------------------------
 
 
+def _collect_assets_chapters() -> list[Chapter]:
+    return [
+        _make_chapter(
+            filename="ch01.html",
+            images=["img/local.png", "https://cdn.example.com/abs.png"],
+            stylesheets=["s/main.css"],
+            site_styles=["s/site.css"],
+        ),
+        _make_chapter(filename="ch02.html", images=["img/two.png"]),
+    ]
+
+
+def _collect_assets_results() -> list[ParseResult]:
+    return [
+        _make_parse_result(
+            discovered_css=["https://cdn/a.css"],
+            discovered_videos=["v/clip.mp4"],
+            cover_src="Images/cover.png",
+        ),
+        _make_parse_result(
+            discovered_css=["https://cdn/a.css", "https://cdn/b.css"],
+            discovered_videos=["v/clip.mp4", "v/two.mp4"],
+            cover_src="Images/other.png",
+        ),
+    ]
+
+
+def _assert_collected_images(collected) -> None:
+    _css, all_images, _videos, _cover = collected
+    # absolute image kept as-is; relative prefixed with asset_base_url
+    assert "img/local.png" not in all_images
+    assert "https://example.com/files/img/local.png" in all_images
+    assert "https://cdn.example.com/abs.png" in all_images
+
+
+def _assert_no_assets_collected(collected) -> None:
+    all_css, _images, _videos, cover_src = collected
+    assert all_css == []
+    assert cover_src is None
+
+
+def _assert_collected_dedup(collected) -> None:
+    all_css, _images, all_videos, cover_src = collected
+    # dedup of css and videos
+    assert all_css == ["https://cdn/a.css", "https://cdn/b.css"]
+    assert all_videos == ["v/clip.mp4", "v/two.mp4"]
+    # first non-None cover_src wins
+    assert cover_src == "Images/cover.png"
+
+
 class TestProcessChapters:
     async def test_collects_assets_and_writes(self, config, monkeypatch, tmp_path):
-        import safaribooks.core.downloader as dl
-
-        chapters = [
-            _make_chapter(
-                filename="ch01.html",
-                images=["img/local.png", "https://cdn.example.com/abs.png"],
-                stylesheets=["s/main.css"],
-                site_styles=["s/site.css"],
-            ),
-            _make_chapter(filename="ch02.html", images=["img/two.png"]),
-        ]
-        results = [
-            _make_parse_result(
-                discovered_css=["https://cdn/a.css"],
-                discovered_videos=["v/clip.mp4"],
-                cover_src="Images/cover.png",
-            ),
-            _make_parse_result(
-                discovered_css=["https://cdn/a.css", "https://cdn/b.css"],
-                discovered_videos=["v/clip.mp4", "v/two.mp4"],
-                cover_src="Images/other.png",
-            ),
-        ]
-        monkeypatch.setattr(dl, "fetch_chapter_html", AsyncMock(return_value="<r/>"))
-        it = iter(results)
-        monkeypatch.setattr(
-            dl, "parse_chapter_html", MagicMock(side_effect=lambda *a, **k: next(it))
-        )
-        write_mock = MagicMock()
-        monkeypatch.setattr(dl, "write_chapter_html", write_mock)
+        monkeypatch.setattr(dl, "fetch_chapter_html", AsyncMock(return_value=_ROOT_HTML))
+        monkeypatch.setattr(dl, "parse_chapter_html", _sequential_parser(_collect_assets_results()))
+        monkeypatch.setattr(dl, "write_chapter_html", MagicMock())
 
         cb = MagicMock()
-        d = BookDownloader(config, BOOK_ID, progress_callback=cb)
-        book_paths = ensure_book_dirs(tmp_path / "build")
-
-        all_css, all_images, all_videos, cover_src = await d._process_chapters(
-            dl.ApiClient if False else MagicMock(),  # client unused (parse mocked)
-            chapters,
-            book_paths,
+        collected = await _make_downloader(config, callback=cb)._process_chapters(
+            MagicMock(),  # client unused (parse mocked)
+            _collect_assets_chapters(),
+            ensure_book_dirs(tmp_path / "build"),
         )
 
-        # absolute image kept as-is; relative prefixed with asset_base_url
-        assert "img/local.png" not in all_images
-        assert "https://example.com/files/img/local.png" in all_images
-        assert "https://cdn.example.com/abs.png" in all_images
-        # dedup of css and videos
-        assert all_css == ["https://cdn/a.css", "https://cdn/b.css"]
-        assert all_videos == ["v/clip.mp4", "v/two.mp4"]
-        # first non-None cover_src wins
-        assert cover_src == "Images/cover.png"
-        assert write_mock.call_count == 2
-        # progress fired per chapter
+        _assert_collected_images(collected)
+        _assert_collected_dedup(collected)
+        # write + progress fired per chapter
+        assert dl.write_chapter_html.call_count == 2
         assert cb.call_count == 2
 
-    async def test_resume_skips_existing_xhtml(self, config, monkeypatch, tmp_path):
-        import safaribooks.core.downloader as dl
-
-        chapters = [_make_chapter(filename="ch01.html")]
-        fetch_mock = AsyncMock(return_value="<r/>")
-        monkeypatch.setattr(dl, "fetch_chapter_html", fetch_mock)
+    async def test_resume_skips_existing_xhtml(self, downloader, monkeypatch, tmp_path):
+        monkeypatch.setattr(dl, "fetch_chapter_html", AsyncMock(return_value=_ROOT_HTML))
         monkeypatch.setattr(dl, "parse_chapter_html", MagicMock())
         monkeypatch.setattr(dl, "write_chapter_html", MagicMock())
 
-        d = BookDownloader(config, BOOK_ID)
         book_paths = ensure_book_dirs(tmp_path / "build")
         # Pre-create the destination xhtml so the chapter is skipped.
         (book_paths.oebps / "ch01.xhtml").write_text("existing", encoding="utf-8")
 
-        all_css, all_images, all_videos, cover_src = await d._process_chapters(
-            MagicMock(), chapters, book_paths
+        collected = await downloader._process_chapters(
+            MagicMock(), [_make_chapter(filename="ch01.html")], book_paths
         )
 
-        fetch_mock.assert_not_called()
-        assert all_css == []
-        assert cover_src is None
+        dl.fetch_chapter_html.assert_not_called()
+        _assert_no_assets_collected(collected)
 
-    async def test_empty_chapters_returns_empty(self, config, tmp_path):
-        d = BookDownloader(config, BOOK_ID)
+    async def test_empty_chapters_returns_empty(self, downloader, tmp_path):
         book_paths = ensure_book_dirs(tmp_path / "build")
-        result = await d._process_chapters(MagicMock(), [], book_paths)
-        assert result == ([], [], [], None)
+        collected = await downloader._process_chapters(MagicMock(), [], book_paths)
+        assert collected == ([], [], [], None)
 
 
 # ---------------------------------------------------------------------------
@@ -397,143 +434,130 @@ class TestProcessChapters:
 # ---------------------------------------------------------------------------
 
 
-class TestRun:
-    async def test_happy_path_returns_epub_and_copies_to_library(
-        self, config, monkeypatch
-    ):
-        book_info = _make_book_info(title="My Book", cover="https://c/cover.jpg")
-        chapters = [_make_chapter(filename="ch01.html")]
+def _assert_lifecycle(client) -> None:
+    # auth + keepalive lifecycle
+    client.check_login.assert_awaited_once()
+    client.start_keepalive.assert_awaited_once()
+    client.stop_keepalive.assert_awaited_once()
+    client.save_cookies.assert_called_once()
+
+
+class TestRunHappyPath:
+    async def test_returns_epub_and_copies_to_library(self, config, monkeypatch):
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(title="My Book", cover="https://c/cover.jpg"),
+            chapters=[_make_chapter(filename="ch01.html")],
             parse_results=[_make_parse_result(cover_src="Images/cover.png")],
         )
 
         cb = MagicMock()
-        d = BookDownloader(config, BOOK_ID, progress_callback=cb)
-        epub_path = await d.run()
+        epub_path = await _make_downloader(config, callback=cb).run()
 
         assert epub_path.suffix == ".epub"
         assert epub_path.exists()
         # Copied to library/epubs
         copied = config.library_dir / "epubs" / epub_path.name
         assert copied.exists()
-        # auth + keepalive lifecycle
-        mocks["client"].check_login.assert_awaited_once()
-        mocks["client"].start_keepalive.assert_awaited_once()
-        mocks["client"].stop_keepalive.assert_awaited_once()
-        mocks["client"].save_cookies.assert_called_once()
+        _assert_lifecycle(mocks["client"])
         # epub progress notified
         cb.assert_any_call("epub", 0, 1)
         cb.assert_any_call("epub", 1, 1)
 
-    async def test_default_cover_fetched_when_no_cover_src(self, config, monkeypatch):
-        book_info = _make_book_info(cover="https://c/cover.jpg")
-        chapters = [_make_chapter(filename="ch01.html", title="Chapter 1")]
+
+class TestRunCover:
+    async def test_default_cover_fetched_when_no_cover_src(self, downloader, monkeypatch):
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(cover="https://c/cover.jpg"),
+            chapters=[_make_chapter(filename="ch01.html", title="Chapter 1")],
             parse_results=[_make_parse_result(cover_src=None)],
             fetch_default_cover_return="cover.jpg",
         )
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
+        await downloader.run()
         mocks["fetch_default_cover"].assert_awaited_once()
 
-    async def test_default_cover_skipped_when_cover_chapter_exists(
-        self, config, monkeypatch
-    ):
-        book_info = _make_book_info(cover="https://c/cover.jpg")
+    async def test_default_cover_skipped_when_cover_chapter(self, downloader, monkeypatch):
         # A chapter whose title contains "cover" suppresses the default cover fetch.
-        chapters = [_make_chapter(filename="ch01.html", title="Cover Page")]
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(cover="https://c/cover.jpg"),
+            chapters=[_make_chapter(filename="ch01.html", title="Cover Page")],
             parse_results=[_make_parse_result(cover_src=None)],
         )
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
+        await downloader.run()
         mocks["fetch_default_cover"].assert_not_awaited()
 
-    async def test_default_cover_skipped_when_book_has_no_cover(
-        self, config, monkeypatch
-    ):
-        book_info = _make_book_info(cover=None)
-        chapters = [_make_chapter(filename="ch01.html", title="Chapter 1")]
+    async def test_default_cover_skipped_when_no_book_cover(self, downloader, monkeypatch):
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(cover=None),
+            chapters=[_make_chapter(filename="ch01.html", title="Chapter 1")],
             parse_results=[_make_parse_result(cover_src=None)],
         )
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
+        await downloader.run()
         mocks["fetch_default_cover"].assert_not_awaited()
 
-    async def test_default_cover_fetch_returns_none(self, config, monkeypatch):
+    async def test_default_cover_fetch_returns_none(self, downloader, monkeypatch):
         # fetch_default_cover returns None -> cover_src stays None, no crash.
-        book_info = _make_book_info(cover="https://c/cover.jpg")
-        chapters = [_make_chapter(filename="ch01.html", title="Chapter 1")]
         _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(cover="https://c/cover.jpg"),
+            chapters=[_make_chapter(filename="ch01.html", title="Chapter 1")],
             parse_results=[_make_parse_result(cover_src=None)],
             fetch_default_cover_return=None,
         )
-        d = BookDownloader(config, BOOK_ID)
-        epub_path = await d.run()
+        epub_path = await downloader.run()
         assert epub_path.exists()
 
-    async def test_videos_downloaded_when_present(self, config, monkeypatch):
-        book_info = _make_book_info()
-        chapters = [_make_chapter(filename="ch01.html")]
+
+class TestRunVideos:
+    async def test_videos_downloaded_when_present(self, downloader, monkeypatch):
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(),
+            chapters=[_make_chapter(filename="ch01.html")],
             parse_results=[_make_parse_result(discovered_videos=["v/clip.mp4"])],
         )
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
+        await downloader.run()
         mocks["download_videos"].assert_awaited_once()
 
-    async def test_videos_not_downloaded_when_absent(self, config, monkeypatch):
-        book_info = _make_book_info()
-        chapters = [_make_chapter(filename="ch01.html")]
+    async def test_videos_not_downloaded_when_absent(self, downloader, monkeypatch):
         mocks = _patch_pipeline(
             monkeypatch,
-            book_info=book_info,
-            chapters=chapters,
+            book_info=_make_book_info(),
+            chapters=[_make_chapter(filename="ch01.html")],
             parse_results=[_make_parse_result(discovered_videos=[])],
         )
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
+        await downloader.run()
         mocks["download_videos"].assert_not_awaited()
 
-    async def test_writes_opf_and_ncx_files(self, config, monkeypatch):
-        book_info = _make_book_info()
-        chapters = [_make_chapter(filename="ch01.html")]
+
+class TestRunArtifacts:
+    async def test_writes_opf_and_ncx_files(self, downloader, monkeypatch):
         # Verify the build dir actually receives content.opf / toc.ncx by
         # intercepting build_epub and inspecting book_paths.
-        import safaribooks.core.downloader as dl
-
-        _patch_pipeline(monkeypatch, book_info=book_info, chapters=chapters)
+        _patch_pipeline(
+            monkeypatch,
+            book_info=_make_book_info(),
+            chapters=[_make_chapter(filename="ch01.html")],
+        )
 
         captured: dict = {}
-        real_build = build_epub
+        monkeypatch.setattr(dl, "build_epub", _BuildSpy(captured))
 
-        def _spy_build(book_paths, out):
-            captured["opf"] = (book_paths.oebps / "content.opf").read_bytes()
-            captured["ncx"] = (book_paths.oebps / "toc.ncx").read_bytes()
-            return real_build(book_paths, out)
+        await downloader.run()
+        assert captured["opf"] == _OPF_BYTES
+        assert captured["ncx"] == _NCX_BYTES
 
-        monkeypatch.setattr(dl, "build_epub", _spy_build)
 
-        d = BookDownloader(config, BOOK_ID)
-        await d.run()
-        assert captured["opf"] == b"<opf/>"
-        assert captured["ncx"] == b"<ncx/>"
+class _BuildSpy:
+    """Captures opf/ncx bytes from the build dir, then runs the real build."""
+
+    def __init__(self, captured: dict) -> None:
+        self._captured = captured
+
+    def __call__(self, book_paths, out):
+        self._captured["opf"] = (book_paths.oebps / "content.opf").read_bytes()
+        self._captured["ncx"] = (book_paths.oebps / "toc.ncx").read_bytes()
+        return build_epub(book_paths, out)

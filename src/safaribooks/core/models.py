@@ -81,7 +81,8 @@ class CookieSet(BaseModel):
     def _check_required_cookies(self) -> "CookieSet":
         missing = REQUIRED_COOKIES - self.cookies.keys()
         if missing:
-            msg = f"Missing required cookies: {', '.join(sorted(missing))}"
+            missing_names = ", ".join(sorted(missing))
+            msg = f"Missing required cookies: {missing_names}"
             raise ValueError(msg)
         return self
 

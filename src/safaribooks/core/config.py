@@ -1,10 +1,11 @@
 """Application configuration using pydantic-settings."""
 
-
 from pathlib import Path
 
 from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
+
+_DEFAULT_KEEPALIVE_INTERVAL = 300
 
 
 class AppConfig(BaseSettings):
@@ -47,6 +48,6 @@ class AppConfig(BaseSettings):
         description="Browser to auto-extract cookies from on session expiry (chrome/firefox/edge/chromium). None=disabled.",
     )
     keepalive_interval: int = Field(
-        default=300,
+        default=_DEFAULT_KEEPALIVE_INTERVAL,
         description="Seconds between session keepalive pings during downloads (0=disabled).",
     )

@@ -24,10 +24,21 @@ app = typer.Typer(
 
 console = Console()
 
+_ERROR_PREFIX = "[red]Error:[/]"
+_PREVIEW_LIMIT = 40
+
 
 def _default_cookie_path() -> Path:
     """Return the default cookie file path from AppConfig."""
     return AppConfig().cookies_file
+
+
+def _preview(cookie_value: str) -> str:
+    """Truncate a cookie value for display, appending an ellipsis when long."""
+    if len(cookie_value) > _PREVIEW_LIMIT:
+        head = cookie_value[:_PREVIEW_LIMIT]
+        return f"{head}..."
+    return cookie_value
 
 
 @app.command()
@@ -43,7 +54,7 @@ def setup(
     try:
         cookie_set = from_paste()
     except CookieError as exc:
-        console.print(f"[red]Error:[/] {exc}")
+        console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
     save(cookie_set, dest)
@@ -67,7 +78,7 @@ def extract(
     try:
         cookie_set = from_browser(browser)
     except CookieError as exc:
-        console.print(f"[red]Error:[/] {exc}")
+        console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
     save(cookie_set, dest)
@@ -94,7 +105,7 @@ def import_cookies(
 ) -> None:
     """Import cookies from a file or header string."""
     if not file and not header:
-        console.print("[red]Error:[/] Provide --file or --header.")
+        console.print(f"{_ERROR_PREFIX} Provide --file or --header.")
         raise typer.Exit(code=1)
 
     dest = output or _default_cookie_path()
@@ -103,11 +114,11 @@ def import_cookies(
             cookie_set = from_file(file)
         else:
             if header is None:  # guarded above; defensive fallback
-                console.print("[red]Error:[/] Provide --file or --header.")
+                console.print(f"{_ERROR_PREFIX} Provide --file or --header.")
                 raise typer.Exit(code=1)
             cookie_set = from_header(header)
     except CookieError as exc:
-        console.print(f"[red]Error:[/] {exc}")
+        console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
     save(cookie_set, dest)
@@ -125,19 +136,18 @@ def validate_cmd(
     """Validate existing cookies."""
     path = cookie_file or _default_cookie_path()
     if not path.is_file():
-        console.print(f"[red]Error:[/] Cookie file not found: {path}")
+        console.print(f"{_ERROR_PREFIX} Cookie file not found: {path}")
         raise typer.Exit(code=1)
 
     try:
         cookie_set = from_file(path)
     except CookieError as exc:
-        console.print(f"[red]Error:[/] {exc}")
+        console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
     console.print(f"[green]Valid![/] {len(cookie_set.cookies)} cookies in {path}")
     for key in sorted(cookie_set.cookies):
-        val = cookie_set.cookies[key]
-        preview = val[:40] + "..." if len(val) > 40 else val
+        preview = _preview(cookie_set.cookies[key])
         console.print(f"  [dim]{key}[/] = {preview}")
 
 

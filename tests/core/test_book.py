@@ -1,5 +1,6 @@
 """Tests for safaribooks.core.book — normalize_chapter and helpers."""
 
+from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import httpx
@@ -17,6 +18,13 @@ from safaribooks.core.exceptions import ApiError
 from safaribooks.core.models import BookInfo, Publisher
 
 BOOK_ID = "9781234567890"
+
+_HTTP_OK = 200
+_HTTP_NOT_FOUND = 404
+_HTTP_SERVER_ERROR = 500
+
+_THUMB_COVER = "https://img.com/thumb/x.jpg"
+_LEGACY_COVER = "https://example.com/legacy-cover.jpg"
 
 
 @pytest.fixture
@@ -46,15 +54,29 @@ def _base_book_info(**overrides: object) -> BookInfo:
 
 
 def _make_response(
-    status_code: int = 200,
-    content: bytes = b"binary-cover-data",
+    status_code: int = _HTTP_OK,
+    body: bytes = b"binary-cover-data",
     content_type: str = "image/jpeg",
 ) -> httpx.Response:
     return httpx.Response(
         status_code=status_code,
         headers={"Content-Type": content_type},
-        content=content,
+        content=body,
     )
+
+
+def _names(models) -> list[str]:
+    """Extract the ``name`` attribute from each model in a sequence."""
+    return [model.name for model in models]
+
+
+def _filenames(chapters) -> list[str]:
+    """Extract the ``filename`` attribute from each chapter."""
+    return [chapter.filename for chapter in chapters]
+
+
+_STRIPPED_IMAGE_URL = "https://learning.oreilly.com/api/v2/epubs/urn:orm:book:123/files/img/fig.png"
+_ASSET_BASE = FILES_API_TEMPLATE.format(BOOK_ID)
 
 
 class TestNormalizeChapterBasic:
@@ -70,115 +92,148 @@ class TestNormalizeChapterBasic:
             "stylesheets": ["style/main.css"],
             "site_styles": ["style/site.css"],
         }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.filename == "ch01.xhtml"
-        assert result.title == "Chapter 1"
-        assert result.images == ["img/fig1.png", "img/fig2.png"]
-        assert len(result.stylesheets) == 1
-        assert result.stylesheets[0].url == "style/main.css"
-        assert result.site_styles == ["style/site.css"]
-        assert "/files" in result.asset_base_url
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert chapter.filename == "ch01.xhtml"
+        assert chapter.title == "Chapter 1"
+        assert chapter.images == ["img/fig1.png", "img/fig2.png"]
+        assert chapter.site_styles == ["style/site.css"]
+        assert "/files" in chapter.asset_base_url
 
-    def test_empty_images_list(self):
-        raw = {
-            "filename": "ch02.xhtml",
-            "content_url": "http://example.com/ch02",
-            "images": [],
-            "stylesheets": [],
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.images == []
-
-
-class TestNormalizeChapterRelatedAssetsFallback:
-    def test_images_from_related_assets(self):
-        raw = {
-            "filename": "ch03.xhtml",
-            "content_url": "http://example.com/ch03",
-            "related_assets": {
-                "images": ["img/a.png", "img/b.jpg"],
-                "stylesheets": ["css/style.css"],
-                "site_styles": ["css/site.css"],
-            },
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.images == ["img/a.png", "img/b.jpg"]
-        assert len(result.stylesheets) == 1
-        assert result.stylesheets[0].url == "css/style.css"
-        assert result.site_styles == ["css/site.css"]
-
-    def test_top_level_images_take_precedence(self):
-        raw = {
-            "filename": "ch04.xhtml",
-            "content_url": "http://example.com/ch04",
-            "images": ["top.png"],
-            "related_assets": {
-                "images": ["fallback.png"],
-            },
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.images == ["top.png"]
-
-
-class TestNormalizeChapterImageURLStripping:
-    def test_full_urls_stripped_to_relative(self):
-        raw = {
-            "filename": "ch05.xhtml",
-            "content_url": "http://example.com/ch05",
-            "images": [
-                "https://learning.oreilly.com/api/v2/epubs/urn:orm:book:123/files/img/fig.png",
-                "img/local.png",
-            ],
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.images == ["img/fig.png", "img/local.png"]
-
-
-class TestNormalizeChapterFilenameFallbacks:
-    def test_filename_from_ourn(self):
-        raw = {
-            "ourn": "urn:orm:book:123:ch07.html",
-            "content_url": "http://example.com/ch07",
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.filename == "ch07.html"
-
-    def test_filename_from_reference_id(self):
-        raw = {
-            "reference_id": "path/to/chapter9.html",
-            "content_url": "http://example.com/ch09",
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.filename == "chapter9.html"
+    @pytest.mark.parametrize(
+        ("raw", "attribute", "expected"),
+        [
+            # Empty images list is preserved as-is.
+            (
+                {
+                    "filename": "ch02.xhtml",
+                    "content_url": "http://example.com/ch02",
+                    "images": [],
+                    "stylesheets": [],
+                },
+                "images",
+                [],
+            ),
+            # related_assets is used when top-level images are absent.
+            (
+                {
+                    "filename": "ch03.xhtml",
+                    "content_url": "http://example.com/ch03",
+                    "related_assets": {"images": ["img/a.png", "img/b.jpg"]},
+                },
+                "images",
+                ["img/a.png", "img/b.jpg"],
+            ),
+            # Top-level images win over related_assets.
+            (
+                {
+                    "filename": "ch04.xhtml",
+                    "content_url": "http://example.com/ch04",
+                    "images": ["top.png"],
+                    "related_assets": {"images": ["fallback.png"]},
+                },
+                "images",
+                ["top.png"],
+            ),
+            # Absolute /files/ image URLs are stripped to relative paths.
+            (
+                {
+                    "filename": "ch05.xhtml",
+                    "content_url": "http://example.com/ch05",
+                    "images": [_STRIPPED_IMAGE_URL, "img/local.png"],
+                },
+                "images",
+                ["img/fig.png", "img/local.png"],
+            ),
+            # ourn provides the filename when no explicit filename is given.
+            (
+                {
+                    "ourn": "urn:orm:book:123:ch07.html",
+                    "content_url": "http://example.com/ch07",
+                },
+                "filename",
+                "ch07.html",
+            ),
+            # reference_id provides the basename fallback.
+            (
+                {
+                    "reference_id": "path/to/chapter9.html",
+                    "content_url": "http://example.com/ch09",
+                },
+                "filename",
+                "chapter9.html",
+            ),
+            # Percent-encoded filenames are decoded.
+            (
+                {
+                    "filename": "ch%2010.xhtml",
+                    "content_url": "http://example.com/ch10",
+                },
+                "filename",
+                "ch 10.xhtml",
+            ),
+            # asset_base_url is derived from the files API template.
+            (
+                {"filename": "ch01.xhtml", "content_url": "http://example.com/ch01"},
+                "asset_base_url",
+                _ASSET_BASE,
+            ),
+            # content falls back to the legacy content field.
+            (
+                {"filename": "ch01.xhtml", "content": "http://example.com/ch01-via-content"},
+                "content_url",
+                "http://example.com/ch01-via-content",
+            ),
+            # Missing title defaults to an empty string.
+            (
+                {"filename": "ch01.xhtml", "content_url": "http://example.com/ch01"},
+                "title",
+                "",
+            ),
+        ],
+    )
+    def test_single_attribute(
+        self,
+        raw: dict[str, object],
+        attribute: str,
+        expected: object,
+    ):
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert getattr(chapter, attribute) == expected
 
     def test_missing_filename_generates_hash(self):
         raw = {
             "content_url": "http://example.com/some-chapter",
         }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.filename.startswith("chapter_")
-        assert result.filename.endswith(".html")
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert chapter.filename.startswith("chapter_")
+        assert chapter.filename.endswith(".html")
 
-    def test_encoded_filename_is_decoded(self):
+
+class TestNormalizeChapterStylesheets:
+    def test_related_assets_styles(self):
         raw = {
-            "filename": "ch%2010.xhtml",
-            "content_url": "http://example.com/ch10",
+            "filename": "ch03.xhtml",
+            "content_url": "http://example.com/ch03",
+            "related_assets": {
+                "stylesheets": ["css/style.css"],
+                "site_styles": ["css/site.css"],
+            },
         }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.filename == "ch 10.xhtml"
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert len(chapter.stylesheets) == 1
+        assert chapter.stylesheets[0].url == "css/style.css"
+        assert chapter.site_styles == ["css/site.css"]
 
-
-class TestNormalizeChapterStylesheetWrapping:
     def test_string_stylesheets_wrapped_in_model(self):
         raw = {
             "filename": "ch06.xhtml",
             "content_url": "http://example.com/ch06",
             "stylesheets": ["style.css", "extra.css"],
         }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert len(result.stylesheets) == 2
-        assert result.stylesheets[0].url == "style.css"
-        assert result.stylesheets[1].url == "extra.css"
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert len(chapter.stylesheets) == 2
+        assert chapter.stylesheets[0].url == "style.css"
+        assert chapter.stylesheets[1].url == "extra.css"
 
     def test_dict_stylesheets_passed_through(self):
         raw = {
@@ -186,39 +241,12 @@ class TestNormalizeChapterStylesheetWrapping:
             "content_url": "http://example.com/ch06b",
             "stylesheets": [{"url": "style.css"}],
         }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.stylesheets[0].url == "style.css"
-
-
-class TestNormalizeChapterAssetBaseUrl:
-    def test_asset_base_url_uses_files_api_template(self):
-        raw = {
-            "filename": "ch01.xhtml",
-            "content_url": "http://example.com/ch01",
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        expected = FILES_API_TEMPLATE.format(BOOK_ID)
-        assert result.asset_base_url == expected
-
-    def test_content_url_fallback_to_content_field(self):
-        raw = {
-            "filename": "ch01.xhtml",
-            "content": "http://example.com/ch01-via-content",
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.content_url == "http://example.com/ch01-via-content"
-
-    def test_missing_title_defaults_to_empty(self):
-        raw = {
-            "filename": "ch01.xhtml",
-            "content_url": "http://example.com/ch01",
-        }
-        result = normalize_chapter(raw, BOOK_ID)
-        assert result.title == ""
+        chapter = normalize_chapter(raw, BOOK_ID)
+        assert chapter.stylesheets[0].url == "style.css"
 
 
 class TestFetchBookInfo:
-    async def test_basic_metadata(self, mock_client: MagicMock):
+    async def test_basic_metadata_fields(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {
             "title": "Real Book",
             "identifier": BOOK_ID,
@@ -230,195 +258,229 @@ class TestFetchBookInfo:
             "publication_date": "2024-01-01",
         }
 
-        info = await fetch_book_info(mock_client, BOOK_ID)
+        book = await fetch_book_info(mock_client, BOOK_ID)
 
-        assert isinstance(info, BookInfo)
-        assert info.title == "Real Book"
-        assert info.isbn == "9990000000001"
-        assert info.description == "A description"
-        assert info.cover == "https://example.com/cover.jpg"
-        assert info.issued == "2024-01-01"
+        assert isinstance(book, BookInfo)
+        actual = {
+            "title": book.title,
+            "isbn": book.isbn,
+            "description": book.description,
+            "cover": book.cover,
+            "issued": book.issued,
+        }
+        assert actual == {
+            "title": "Real Book",
+            "isbn": "9990000000001",
+            "description": "A description",
+            "cover": "https://example.com/cover.jpg",
+            "issued": "2024-01-01",
+        }
+
+    async def test_basic_metadata_requests_v2_url(self, mock_client: MagicMock):
+        mock_client.get_json.return_value = {
+            "title": "Real Book",
+            "identifier": BOOK_ID,
+        }
+
+        await fetch_book_info(mock_client, BOOK_ID)
+
         # Correct v2 API URL was requested.
         url = mock_client.get_json.call_args[0][0]
         assert url == f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{BOOK_ID}/"
 
-    async def test_descriptions_plaintext_preferred(self, mock_client: MagicMock):
+    @pytest.mark.parametrize(
+        ("descriptions", "expected"),
+        [
+            (
+                {"text/plain": "plain text desc", "text/html": "<p>html desc</p>"},
+                "plain text desc",
+            ),
+            ({"text/html": "<p>html desc</p>"}, "<p>html desc</p>"),
+        ],
+    )
+    async def test_descriptions_selection(
+        self,
+        mock_client: MagicMock,
+        descriptions: dict[str, str],
+        expected: str,
+    ):
         mock_client.get_json.return_value = {
             "title": "Book",
             "description": "fallback",
-            "descriptions": {
-                "text/plain": "plain text desc",
-                "text/html": "<p>html desc</p>",
-            },
+            "descriptions": descriptions,
         }
 
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.description == "plain text desc"
-
-    async def test_descriptions_html_when_no_plaintext(self, mock_client: MagicMock):
-        mock_client.get_json.return_value = {
-            "title": "Book",
-            "description": "fallback",
-            "descriptions": {"text/html": "<p>html desc</p>"},
-        }
-
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.description == "<p>html desc</p>"
+        book = await fetch_book_info(mock_client, BOOK_ID)
+        assert book.description == expected
 
     async def test_defaults_when_fields_absent(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {"title": "Bare Book"}
 
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.identifier == BOOK_ID
-        assert info.isbn == ""
-        assert info.description == ""
-        assert info.web_url == f"{SAFARI_BASE_URL}/library/view/-/{BOOK_ID}/"
-        assert info.cover is None
+        book = await fetch_book_info(mock_client, BOOK_ID)
+        assert book.identifier == BOOK_ID
+        assert book.isbn == ""
+        assert book.description == ""
+        assert book.web_url == f"{SAFARI_BASE_URL}/library/view/-/{BOOK_ID}/"
+        assert book.cover is None
 
     async def test_cover_falls_back_to_cover_field(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {
             "title": "Book",
-            "cover": "https://example.com/legacy-cover.jpg",
+            "cover": _LEGACY_COVER,
         }
 
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.cover == "https://example.com/legacy-cover.jpg"
+        book = await fetch_book_info(mock_client, BOOK_ID)
+        assert book.cover == _LEGACY_COVER
 
-    async def test_missing_title_key_raises_api_error(self, mock_client: MagicMock):
-        mock_client.get_json.return_value = {"identifier": BOOK_ID}
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            {"identifier": BOOK_ID},
+            ["not", "a", "dict"],
+        ],
+    )
+    async def test_invalid_response_raises_api_error(
+        self,
+        mock_client: MagicMock,
+        payload: object,
+    ):
+        mock_client.get_json.return_value = payload
 
         with pytest.raises(ApiError, match="unexpected data"):
             await fetch_book_info(mock_client, BOOK_ID)
 
-    async def test_non_dict_response_raises_api_error(self, mock_client: MagicMock):
-        mock_client.get_json.return_value = ["not", "a", "dict"]
 
-        with pytest.raises(ApiError, match="unexpected data"):
-            await fetch_book_info(mock_client, BOOK_ID)
-
-
-class TestEnrichBookMetadata:
-    async def test_enriches_all_fields(self, mock_client: MagicMock):
-        info = _base_book_info(web_url="")
+class TestEnrichBookMetadataFields:
+    async def test_enriches_simple_fields(self, mock_client: MagicMock):
+        book = _base_book_info(web_url="")
         mock_client.get_json.return_value = {
             "results": [
                 {
                     "isbn": BOOK_ID,
-                    "authors": ["Jane Doe", "John Smith"],
-                    "publishers": "No Starch Press",
                     "issued": "2023-05-05",
-                    "subjects": ["Python", "Testing"],
                     "cover_url": "https://example.com/c.jpg",
                     "web_url": "https://example.com/web",
                 }
             ]
         }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
 
-        assert [a.name for a in result.authors] == ["Jane Doe", "John Smith"]
-        assert result.publishers == [Publisher(name="No Starch Press")]
-        assert result.issued == "2023-05-05"
-        assert [s.name for s in result.subjects] == ["Python", "Testing"]
-        assert result.cover == "https://example.com/c.jpg"
-        assert result.web_url == "https://example.com/web"
+        assert enriched.issued == "2023-05-05"
+        assert enriched.cover == "https://example.com/c.jpg"
+        assert enriched.web_url == "https://example.com/web"
 
-    async def test_publishers_list_of_strings(self, mock_client: MagicMock):
-        info = _base_book_info()
+    async def test_enriches_collection_fields(self, mock_client: MagicMock):
+        book = _base_book_info(web_url="")
         mock_client.get_json.return_value = {
-            "results": [{"isbn": BOOK_ID, "publishers": ["Pub A", "Pub B"]}]
+            "results": [
+                {
+                    "isbn": BOOK_ID,
+                    "authors": ["Jane Doe", "John Smith"],
+                    "publishers": "No Starch Press",
+                    "subjects": ["Python", "Testing"],
+                }
+            ]
         }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result.publishers == [Publisher(name="Pub A"), Publisher(name="Pub B")]
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
 
-    async def test_publishers_list_of_dicts(self, mock_client: MagicMock):
-        info = _base_book_info()
+        assert _names(enriched.authors) == ["Jane Doe", "John Smith"]
+        assert enriched.publishers == [Publisher(name="No Starch Press")]
+        assert _names(enriched.subjects) == ["Python", "Testing"]
+
+
+class TestEnrichBookMetadataPublishers:
+    @pytest.mark.parametrize(
+        ("publishers", "expected"),
+        [
+            (["Pub A", "Pub B"], [Publisher(name="Pub A"), Publisher(name="Pub B")]),
+            ([{"name": "Pub Dict"}], [Publisher(name="Pub Dict")]),
+            # Neither str nor list -> no update applied.
+            ({"name": "ignored-dict"}, []),
+        ],
+    )
+    async def test_publisher_coercion(
+        self,
+        mock_client: MagicMock,
+        publishers: object,
+        expected: list[Publisher],
+    ):
+        book = _base_book_info()
         mock_client.get_json.return_value = {
-            "results": [{"isbn": BOOK_ID, "publishers": [{"name": "Pub Dict"}]}]
+            "results": [{"isbn": BOOK_ID, "publishers": publishers}]
         }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result.publishers == [Publisher(name="Pub Dict")]
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
+        assert enriched.publishers == expected
 
-    async def test_publishers_unrecognized_type_skipped(self, mock_client: MagicMock):
-        info = _base_book_info()
-        # publishers present but neither str nor list -> no update applied.
-        mock_client.get_json.return_value = {
-            "results": [{"isbn": BOOK_ID, "publishers": {"name": "ignored-dict"}}]
-        }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result.publishers == []
-
+class TestEnrichBookMetadataFallbacks:
     async def test_issued_falls_back_to_date_added(self, mock_client: MagicMock):
-        info = _base_book_info()
+        book = _base_book_info()
         mock_client.get_json.return_value = {
             "results": [{"isbn": BOOK_ID, "date_added": "2020-02-02"}]
         }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result.issued == "2020-02-02"
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
+        assert enriched.issued == "2020-02-02"
 
     async def test_cover_not_overwritten_when_already_set(self, mock_client: MagicMock):
-        info = _base_book_info(cover="https://existing.com/cover.jpg")
+        book = _base_book_info(cover="https://existing.com/cover.jpg")
         mock_client.get_json.return_value = {
             "results": [{"isbn": BOOK_ID, "cover_url": "https://new.com/cover.jpg"}]
         }
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result.cover == "https://existing.com/cover.jpg"
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
+        assert enriched.cover == "https://existing.com/cover.jpg"
 
-    async def test_no_results_returns_unchanged(self, mock_client: MagicMock):
-        info = _base_book_info()
-        mock_client.get_json.return_value = {"results": []}
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result is info
+class TestEnrichBookMetadataMatching:
+    @pytest.mark.parametrize(
+        "payload",
+        [
+            # No results at all -> the original object is returned.
+            {"results": []},
+            # A result that matches no identifier -> unchanged, authors empty.
+            {"results": [{"isbn": "0000000000000", "archive_id": "different", "authors": ["X"]}]},
+            # A matching result with no enrichable fields -> unchanged.
+            {"results": [{"isbn": BOOK_ID}]},
+            # The lookup raising is swallowed and the original is returned.
+            ApiError("boom"),
+        ],
+    )
+    async def test_returns_unchanged(
+        self,
+        mock_client: MagicMock,
+        payload: object,
+    ):
+        book = _base_book_info()
+        if isinstance(payload, Exception):
+            mock_client.get_json.side_effect = payload
+        else:
+            mock_client.get_json.return_value = payload
 
-    async def test_mismatched_result_returns_unchanged(self, mock_client: MagicMock):
-        info = _base_book_info()
-        mock_client.get_json.return_value = {
-            "results": [{"isbn": "0000000000000", "archive_id": "different", "authors": ["X"]}]
-        }
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
+        assert enriched is book
+        assert enriched.authors == []
 
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result is info
-        assert result.authors == []
+    @pytest.mark.parametrize(
+        "result_entry",
+        [
+            {"isbn": "0000000000000", "archive_id": BOOK_ID, "authors": ["Match"]},
+            {"identifier": BOOK_ID, "authors": ["Match"]},
+        ],
+    )
+    async def test_matches_via_alternate_keys(
+        self,
+        mock_client: MagicMock,
+        result_entry: dict[str, object],
+    ):
+        book = _base_book_info()
+        mock_client.get_json.return_value = {"results": [result_entry]}
 
-    async def test_matches_via_archive_id(self, mock_client: MagicMock):
-        info = _base_book_info()
-        mock_client.get_json.return_value = {
-            "results": [{"isbn": "0000000000000", "archive_id": BOOK_ID, "authors": ["Match"]}]
-        }
-
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert [a.name for a in result.authors] == ["Match"]
-
-    async def test_matches_via_identifier_fallback(self, mock_client: MagicMock):
-        info = _base_book_info()
-        # No isbn -> falls back to identifier field for matching.
-        mock_client.get_json.return_value = {
-            "results": [{"identifier": BOOK_ID, "authors": ["Ident"]}]
-        }
-
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert [a.name for a in result.authors] == ["Ident"]
-
-    async def test_no_updates_returns_same_info(self, mock_client: MagicMock):
-        info = _base_book_info()
-        # Matching result but no enrichable fields.
-        mock_client.get_json.return_value = {"results": [{"isbn": BOOK_ID}]}
-
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result is info
-
-    async def test_exception_returns_original(self, mock_client: MagicMock):
-        info = _base_book_info()
-        mock_client.get_json.side_effect = ApiError("boom")
-
-        result = await enrich_book_metadata(mock_client, BOOK_ID, info)
-        assert result is info
+        enriched = await enrich_book_metadata(mock_client, BOOK_ID, book)
+        assert _names(enriched.authors) == ["Match"]
 
 
 class TestFetchChapters:
@@ -432,7 +494,7 @@ class TestFetchChapters:
         }
 
         chapters = await fetch_chapters(mock_client, BOOK_ID)
-        assert [c.filename for c in chapters] == ["ch01.xhtml", "ch02.xhtml"]
+        assert _filenames(chapters) == ["ch01.xhtml", "ch02.xhtml"]
 
     async def test_pagination_followed(self, mock_client: MagicMock):
         page1 = {
@@ -446,7 +508,7 @@ class TestFetchChapters:
         mock_client.get_json.side_effect = [page1, page2]
 
         chapters = await fetch_chapters(mock_client, BOOK_ID)
-        assert {c.filename for c in chapters} == {"ch01.xhtml", "ch02.xhtml"}
+        assert set(_filenames(chapters)) == {"ch01.xhtml", "ch02.xhtml"}
         assert mock_client.get_json.call_count == 2
 
     async def test_empty_page_after_content_breaks(self, mock_client: MagicMock):
@@ -458,7 +520,7 @@ class TestFetchChapters:
         mock_client.get_json.side_effect = [page1, page2]
 
         chapters = await fetch_chapters(mock_client, BOOK_ID)
-        assert [c.filename for c in chapters] == ["ch01.xhtml"]
+        assert _filenames(chapters) == ["ch01.xhtml"]
 
     async def test_cover_chapters_reordered_first(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {
@@ -472,7 +534,7 @@ class TestFetchChapters:
 
         chapters = await fetch_chapters(mock_client, BOOK_ID)
         assert chapters[0].filename == "cover.xhtml"
-        assert [c.filename for c in chapters[1:]] == ["ch01.xhtml", "ch02.xhtml"]
+        assert _filenames(chapters[1:]) == ["ch01.xhtml", "ch02.xhtml"]
 
     async def test_cover_detected_by_title(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {
@@ -494,102 +556,114 @@ class TestFetchChapters:
 
 
 class TestFetchDefaultCover:
-    async def test_no_cover_url_returns_none(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover=None)
+    async def test_no_cover_url_returns_none(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover=None)
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result is None
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name is None
         mock_client.get.assert_not_called()
 
-    async def test_downloads_first_successful_variant(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover="https://img.com/thumb/x.jpg")
-        mock_client.get.return_value = _make_response(content=b"jpegbytes")
+    async def test_downloads_first_successful_variant(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover=_THUMB_COVER)
+        mock_client.get.return_value = _make_response(body=b"jpegbytes")
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result == "default_cover.jpeg"
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name == "default_cover.jpeg"
         saved = tmp_path / "default_cover.jpeg"
         assert saved.read_bytes() == b"jpegbytes"
         # First attempt is the /orig/ variant.
-        first_url = mock_client.get.call_args_list[0][0][0]
-        assert "/orig/" in first_url
+        call_args = mock_client.get.call_args_list[0][0]
+        assert "/orig/" in call_args[0]
 
-    async def test_content_type_determines_extension(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover="https://img.com/cover.png")
+    async def test_content_type_determines_extension(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover="https://img.com/cover.png")
         mock_client.get.return_value = _make_response(content_type="image/png")
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result == "default_cover.png"
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name == "default_cover.png"
 
-    async def test_falls_back_through_variants_on_non_200(
-        self, mock_client: MagicMock, tmp_path
+    async def test_falls_back_through_variants_on_failure(
+        self, mock_client: MagicMock, tmp_path: Path
     ):
-        info = _base_book_info(cover="https://img.com/thumb/x.jpg")
+        book = _base_book_info(cover=_THUMB_COVER)
         # First three variants 404, last one (raw cover_url) succeeds.
         mock_client.get.side_effect = [
-            _make_response(status_code=404),
-            _make_response(status_code=404),
-            _make_response(status_code=404),
-            _make_response(status_code=200, content=b"ok"),
+            _make_response(status_code=_HTTP_NOT_FOUND),
+            _make_response(status_code=_HTTP_NOT_FOUND),
+            _make_response(status_code=_HTTP_NOT_FOUND),
+            _make_response(status_code=_HTTP_OK, body=b"ok"),
         ]
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result == "default_cover.jpeg"
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name == "default_cover.jpeg"
         assert (tmp_path / "default_cover.jpeg").read_bytes() == b"ok"
 
-    async def test_api_error_skips_to_next_variant(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover="https://img.com/thumb/x.jpg")
+    async def test_api_error_skips_to_next_variant(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover=_THUMB_COVER)
         mock_client.get.side_effect = [
             ApiError("fail orig"),
-            _make_response(status_code=200, content=b"second"),
+            _make_response(status_code=_HTTP_OK, body=b"second"),
         ]
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result == "default_cover.jpeg"
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name == "default_cover.jpeg"
         assert (tmp_path / "default_cover.jpeg").read_bytes() == b"second"
 
-    async def test_all_variants_fail_returns_none(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover="https://img.com/thumb/x.jpg")
-        mock_client.get.return_value = _make_response(status_code=500)
+    async def test_all_variants_fail_returns_none(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover=_THUMB_COVER)
+        mock_client.get.return_value = _make_response(status_code=_HTTP_SERVER_ERROR)
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result is None
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name is None
         assert list(tmp_path.iterdir()) == []
 
-    async def test_all_variants_raise_returns_none(self, mock_client: MagicMock, tmp_path):
-        info = _base_book_info(cover="https://img.com/thumb/x.jpg")
+    async def test_all_variants_raise_returns_none(self, mock_client: MagicMock, tmp_path: Path):
+        book = _base_book_info(cover=_THUMB_COVER)
         mock_client.get.side_effect = ApiError("always fails")
 
-        result = await fetch_default_cover(mock_client, info, tmp_path)
-        assert result is None
+        cover_name = await fetch_default_cover(mock_client, book, tmp_path)
+        assert cover_name is None
 
 
 class TestNullFieldCoalescing:
-    async def test_explicit_null_fields_coalesce_to_defaults(self, mock_client: MagicMock):
-        # An API response with explicit JSON nulls must not crash BookInfo
-        # construction; required string fields coalesce to safe defaults.
-        mock_client.get_json.return_value = {
-            "title": "ok",
-            "identifier": None,
-            "isbn": None,
-            "description": None,
-            "web_url": None,
-            "rights": None,
-        }
+    @pytest.mark.parametrize(
+        ("payload", "expected"),
+        [
+            # Explicit JSON nulls must not crash BookInfo construction;
+            # required string fields coalesce to safe defaults.
+            (
+                {
+                    "title": "ok",
+                    "identifier": None,
+                    "isbn": None,
+                    "description": None,
+                    "web_url": None,
+                    "rights": None,
+                },
+                {
+                    "isbn": "",
+                    "rights": "",
+                    "description": "",
+                    "identifier": BOOK_ID,
+                },
+            ),
+            # Present string fields are passed through verbatim.
+            (
+                {"title": "ok", "isbn": "123", "rights": "r"},
+                {"isbn": "123", "rights": "r"},
+            ),
+        ],
+    )
+    async def test_field_coalescing(
+        self,
+        mock_client: MagicMock,
+        payload: dict[str, object],
+        expected: dict[str, str],
+    ):
+        mock_client.get_json.return_value = payload
 
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.isbn == ""
-        assert info.rights == ""
-        assert info.description == ""
-        assert info.identifier == BOOK_ID
-        assert info.web_url.endswith(f"/{BOOK_ID}/")
-
-    async def test_present_fields_preserved(self, mock_client: MagicMock):
-        mock_client.get_json.return_value = {
-            "title": "ok",
-            "isbn": "123",
-            "rights": "r",
-        }
-
-        info = await fetch_book_info(mock_client, BOOK_ID)
-        assert info.isbn == "123"
-        assert info.rights == "r"
+        book = await fetch_book_info(mock_client, BOOK_ID)
+        for attribute, expected_value in expected.items():
+            assert getattr(book, attribute) == expected_value
+        # Defaulted web_url always reflects the requested book id.
+        assert book.web_url.endswith(f"/{BOOK_ID}/")
