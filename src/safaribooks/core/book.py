@@ -62,21 +62,21 @@ async def fetch_book_info(client: ApiClient, book_id: str) -> BookInfo:
     if isinstance(data.get("descriptions"), dict):
         desc = data["descriptions"].get("text/plain", data["descriptions"].get("text/html", desc))
 
-    info = BookInfo(
-        title=data.get("title", ""),
-        identifier=data.get("identifier", book_id),
-        isbn=data.get("isbn", ""),
+    # Use `or` (not a dict default) so an explicit JSON null from the API
+    # coalesces to a valid default instead of failing BookInfo validation.
+    return BookInfo(
+        title=data.get("title") or "",
+        identifier=data.get("identifier") or book_id,
+        isbn=data.get("isbn") or "",
         description=desc or "",
-        web_url=data.get("web_url", f"{SAFARI_BASE_URL}/library/view/-/{book_id}/"),
-        rights=data.get("rights", ""),
+        web_url=data.get("web_url") or f"{SAFARI_BASE_URL}/library/view/-/{book_id}/",
+        rights=data.get("rights") or "",
         cover=data.get("cover_url", data.get("cover", None)),
         authors=[],
         publishers=[],
         subjects=[],
         issued=data.get("publication_date", None),
     )
-
-    return _replace_none_fields(info)
 
 
 async def enrich_book_metadata(
@@ -315,15 +315,7 @@ async def fetch_default_cover(
 # ---------------------------------------------------------------------------
 
 
-def _replace_none_fields(info: BookInfo) -> BookInfo:
-    """Replace any ``None`` string fields with ``"n/a"``."""
-    updates: dict[str, str] = {}
-    for field_name in ("title", "identifier", "isbn", "description", "web_url", "rights"):
-        if getattr(info, field_name) is None:
-            updates[field_name] = "n/a"
-    if updates:
-        return info.model_copy(update=updates)
-    return info
+
 
 
 def _resolve_filename(raw_chapter: dict[str, Any]) -> str:

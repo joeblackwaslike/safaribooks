@@ -32,13 +32,30 @@ class RetryConfig(BaseModel):
     rate_limit_multiplier: float = 2.0
 
 
-def is_retryable_error(exc: BaseException) -> bool:
-    """Tenacity retry predicate for transient HTTP errors."""
+def is_retryable_error(
+    exc: BaseException,
+    retryable_status_codes: frozenset[int] = _DEFAULT_RETRYABLE_STATUS_CODES,
+) -> bool:
+    """Tenacity retry predicate for transient HTTP errors.
+
+    ``retryable_status_codes`` defaults to the module-level set; pass a custom
+    set (e.g. from a :class:`RetryConfig`) so caller configuration is honoured.
+    """
     if isinstance(exc, _RETRYABLE_NETWORK_ERRORS):
         return True
     if isinstance(exc, httpx.HTTPStatusError):
-        return exc.response.status_code in _DEFAULT_RETRYABLE_STATUS_CODES
+        return exc.response.status_code in retryable_status_codes
     return False
+
+
+def _make_retry_predicate(cfg: "RetryConfig") -> Callable[[BaseException], bool]:
+    """Build a tenacity predicate bound to ``cfg``'s retryable status codes."""
+    codes = cfg.retryable_status_codes
+
+    def predicate(exc: BaseException) -> bool:
+        return is_retryable_error(exc, codes)
+
+    return predicate
 
 
 def _make_wait_func(config: RetryConfig) -> Callable[[tenacity.RetryCallState], float]:
@@ -78,7 +95,7 @@ def retry_request(config: RetryConfig | None = None) -> Callable[..., Any]:
     """Factory returning a tenacity retry decorator for API requests."""
     cfg = config or RetryConfig()
     return tenacity.retry(
-        retry=tenacity.retry_if_exception(is_retryable_error),
+        retry=tenacity.retry_if_exception(_make_retry_predicate(cfg)),
         wait=_make_wait_func(cfg),
         stop=tenacity.stop_after_attempt(cfg.max_attempts),
         before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),
@@ -90,7 +107,7 @@ def retry_asset(config: RetryConfig | None = None) -> Callable[..., Any]:
     """Lighter retry decorator tuned for asset downloads."""
     cfg = config or RetryConfig(max_attempts=3, base_delay=0.5, max_delay=30.0)
     return tenacity.retry(
-        retry=tenacity.retry_if_exception(is_retryable_error),
+        retry=tenacity.retry_if_exception(_make_retry_predicate(cfg)),
         wait=_make_wait_func(cfg),
         stop=tenacity.stop_after_attempt(cfg.max_attempts),
         before_sleep=tenacity.before_sleep_log(logger, logging.WARNING),

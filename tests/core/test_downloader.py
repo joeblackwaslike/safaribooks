@@ -1,8 +1,6 @@
 """Tests for safaribooks.core.downloader — orchestration, chapter loop, and helpers."""
 # ruff: noqa: SLF001
 
-import shutil
-from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock
 
 import pytest
@@ -180,12 +178,10 @@ class TestExtractBookId:
     def test_bare_decimal(self):
         assert extract_book_id("9781234567890") == "9781234567890"
 
-    def test_prefixed_id_returns_none(self):
-        # NOTE: _BARE_BOOK_ID_RE uses re.match (start-anchored) with a trailing
-        # ``$``, so a digit run in the *middle/end* of a non-decimal string is
-        # never matched. See suspected_bugs. We assert the actual behavior
-        # rather than the seemingly-intended "extract trailing id".
-        assert extract_book_id("book-9781234567890") is None
+    def test_prefixed_id_extracted(self):
+        # A trailing decimal id on a non-decimal string is extracted via
+        # re.search against the $-anchored pattern.
+        assert extract_book_id("book-9781234567890") == "9781234567890"
 
     def test_unparseable_returns_none(self):
         assert extract_book_id("not-a-book-id") is None

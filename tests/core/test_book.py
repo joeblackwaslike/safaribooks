@@ -563,14 +563,27 @@ class TestFetchDefaultCover:
         assert result is None
 
 
-class TestReplaceNoneFields:
-    # NOTE: _replace_none_fields() checks for None on required str fields
-    # (title/identifier/isbn/description/web_url/rights), but BookInfo
-    # construction in fetch_book_info() rejects None for those fields before
-    # _replace_none_fields ever runs (Pydantic string_type error). So the
-    # "n/a" replacement path (lines 323/325) is unreachable. Recorded as a
-    # suspected bug; only the no-op return path is exercised here.
-    async def test_no_none_fields_returns_unchanged(self, mock_client: MagicMock):
+class TestNullFieldCoalescing:
+    async def test_explicit_null_fields_coalesce_to_defaults(self, mock_client: MagicMock):
+        # An API response with explicit JSON nulls must not crash BookInfo
+        # construction; required string fields coalesce to safe defaults.
+        mock_client.get_json.return_value = {
+            "title": "ok",
+            "identifier": None,
+            "isbn": None,
+            "description": None,
+            "web_url": None,
+            "rights": None,
+        }
+
+        info = await fetch_book_info(mock_client, BOOK_ID)
+        assert info.isbn == ""
+        assert info.rights == ""
+        assert info.description == ""
+        assert info.identifier == BOOK_ID
+        assert info.web_url.endswith(f"/{BOOK_ID}/")
+
+    async def test_present_fields_preserved(self, mock_client: MagicMock):
         mock_client.get_json.return_value = {
             "title": "ok",
             "isbn": "123",

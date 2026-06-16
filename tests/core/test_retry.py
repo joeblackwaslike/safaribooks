@@ -81,6 +81,12 @@ class TestIsRetryableError:
         # WriteTimeout is intentionally excluded from the retryable network errors.
         assert is_retryable_error(httpx.WriteTimeout("w")) is False
 
+    def test_custom_status_codes_honored(self):
+        # An explicit code set overrides the module default.
+        codes = frozenset({418})
+        assert is_retryable_error(_make_status_error(418), codes) is True
+        assert is_retryable_error(_make_status_error(503), codes) is False
+
 
 class TestWaitFuncRetryAfter:
     def test_retry_after_numeric_429_applies_multiplier(self):
@@ -265,6 +271,43 @@ class TestRetryRequestDecorator:
 
         assert ok() == 42
         assert calls["n"] == 1
+
+    def test_honors_config_status_codes(self):
+        # retry_request must build its predicate from the config's codes, not
+        # the module default: a custom 418 retries, while 503 (default-only) does not.
+        cfg = RetryConfig(
+            retryable_status_codes=frozenset({418}),
+            max_attempts=3,
+            jitter=False,
+            base_delay=0.0,
+            max_delay=0.0,
+        )
+        decorator = retry_request(cfg)
+        calls = {"teapot": 0, "unavail": 0}
+
+        @decorator
+        def teapot() -> None:
+            calls["teapot"] += 1
+            raise _make_status_error(418)
+
+        try:
+            teapot()
+            raise AssertionError("expected HTTPStatusError")
+        except httpx.HTTPStatusError:
+            pass
+        assert calls["teapot"] == 3  # 418 retried because config lists it
+
+        @decorator
+        def unavailable() -> None:
+            calls["unavail"] += 1
+            raise _make_status_error(503)
+
+        try:
+            unavailable()
+            raise AssertionError("expected HTTPStatusError")
+        except httpx.HTTPStatusError:
+            pass
+        assert calls["unavail"] == 1  # 503 not in the custom set -> not retried
 
 
 class TestRetryAssetDecorator:

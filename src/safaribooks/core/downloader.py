@@ -374,8 +374,9 @@ def extract_book_id(input_str: str) -> str | None:
     if input_str.isdecimal():
         return input_str
 
-    # Decimal ID at end of string
-    id_match = _BARE_BOOK_ID_RE.match(input_str)
+    # Decimal ID at end of string (search, not match: the pattern is $-anchored
+    # so .match() would only ever fire on an all-digit string already handled above)
+    id_match = _BARE_BOOK_ID_RE.search(input_str)
     if id_match:
         return id_match.group(1)
 

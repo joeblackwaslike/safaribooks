@@ -7,7 +7,7 @@ from typing import Any
 from urllib.parse import unquote, urljoin, urlparse
 
 from lxml import etree, html
-from lxml.html import HtmlElement
+from lxml.html import HtmlElement, html5parser
 
 from safaribooks.core.api import ApiClient
 from safaribooks.core.constants import SAFARI_BASE_URL
@@ -143,7 +143,7 @@ async def fetch_chapter_html(client: ApiClient, url: str) -> HtmlElement:  # typ
     try:
         html_text = response.text
         if not re.search("<html", html_text, re.IGNORECASE):
-            html_text = etree.tostring(html.html5parser.fromstring(html_text), encoding="unicode")
+            html_text = etree.tostring(html5parser.fromstring(html_text), encoding="unicode")
         return html.fromstring(html_text, base_url=SAFARI_BASE_URL)
 
     except (etree.ParseError, etree.ParserError) as exc:

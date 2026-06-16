@@ -413,8 +413,9 @@ class TestParseChapterHtml:
     def test_inline_style_serialize_error_raises(self, monkeypatch):
         # Force html.tostring to fail while serializing the inline <style>
         # element, covering the except branch (lines 315-317).
-        import safaribooks.core.chapters as chapters_mod
         from lxml import etree as _etree
+
+        import safaribooks.core.chapters as chapters_mod
 
         root = self._make_html("<p>Content</p>")
         head = root.xpath("//head")[0]
@@ -437,8 +438,9 @@ class TestParseChapterHtml:
         # Force html.tostring to fail when serializing the chapter body,
         # covering the except branch (lines 364-366). No inline <style> here,
         # so the first tostring call is the body serialization.
-        import safaribooks.core.chapters as chapters_mod
         from lxml import etree as _etree
+
+        import safaribooks.core.chapters as chapters_mod
 
         root = self._make_html("<p>Content</p>")
 
@@ -565,13 +567,22 @@ class TestFetchChapterHtml:
         root = await fetch_chapter_html(client, "https://example.com/ch.html")
         assert "Caps" in html.tostring(root, encoding="unicode")
 
+    async def test_fragment_without_html_tag_uses_html5parser(self):
+        # A bare fragment (no <html> tag) must go through the html5parser
+        # fallback without crashing. Previously this raised AttributeError
+        # because lxml.html exposes html5parser only as a submodule.
+        client = self._client(200, "<p>Just a fragment</p>")
+        root = await fetch_chapter_html(client, "https://example.com/ch.html")
+        assert "Just a fragment" in html.tostring(root, encoding="unicode")
+
     async def test_parse_error_raises_parsing_error(self):
         # An empty/whitespace body that lxml cannot parse raises ParsingError.
         # Force the parse failure path (lines 149-151) via an empty document.
         client = self._client(200, "<html></html>")
         # Patch html.fromstring to raise a parser error for this call.
-        import safaribooks.core.chapters as chapters_mod
         from lxml import etree as _etree
+
+        import safaribooks.core.chapters as chapters_mod
 
         orig = chapters_mod.html.fromstring
 
