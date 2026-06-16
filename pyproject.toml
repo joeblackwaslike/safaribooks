@@ -105,6 +105,8 @@ extend_default = true
 target-version = "py312"
 line-length = 100
 fix = true
+# Frozen legacy reference scripts (kept for historical credit, not linted).
+extend-exclude = ["*_legacy.py"]
 
 [tool.ruff.lint]
 select = [
