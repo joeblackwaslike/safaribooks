@@ -34,11 +34,13 @@ from safaribooks.core.epub import (
     write_chapter_html,
 )
 from safaribooks.core.exceptions import ApiError
+from safaribooks.core.markdown import convert_epub
 from safaribooks.core.models import BookInfo, Chapter, ParseContext, ParseResult
 
 logger = logging.getLogger(__name__)
 
 _EPUB_SUFFIX = ".epub"
+_MD_SUFFIX = ".md"
 _IMAGES_PREFIX = "Images"
 _TOC_URL_TEMPLATE = f"{SAFARI_BASE_URL}/api/v2/epubs/urn:orm:book:{{0}}/table-of-contents/"
 _XML_ENCODING = "utf-8"
@@ -142,22 +144,56 @@ class _BookBuilder:
         self._epub_output_path: Path
 
     async def run(self, client: ApiClient) -> Path:
-        """Execute the full pipeline against *client* and return the EPUB path."""
+        """Execute the full pipeline and return the EPUB (or Markdown) path."""
         self.client = client
         await self._prepare()
         self.config.output_dir.mkdir(parents=True, exist_ok=True)
-        epub_filename = sanitize_dirname(self.book_info.title) + _EPUB_SUFFIX
-        self._epub_output_path = self.config.output_dir / epub_filename
+        stem = sanitize_dirname(self.book_info.title)
+        md_path = self.config.output_dir / (stem + _MD_SUFFIX)
 
+        if self.config.markdown_only:
+            result_path = await self._run_markdown_only(stem, md_path)
+        else:
+            result_path = await self._run_with_epub(stem, md_path)
+
+        await client.stop_keepalive()
+        client.save_cookies()
+        return result_path
+
+    async def _run_with_epub(self, stem: str, md_path: Path) -> Path:
+        """Build the EPUB into the output dir, then optionally the Markdown file."""
+        self._epub_output_path = self.config.output_dir / (stem + _EPUB_SUFFIX)
         with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
             self.book_paths = ensure_book_dirs(Path(tmp_dir))
             logger.info("Build directory: %s", self.book_paths.book_dir)
             epub_path = await self._build()
-
         _copy_to_library(self.config.library_dir, epub_path)
-        await client.stop_keepalive()
-        client.save_cookies()
+        if self.config.markdown:
+            self._write_markdown(epub_path, md_path)
         return epub_path
+
+    async def _run_markdown_only(self, stem: str, md_path: Path) -> Path:
+        """Build the EPUB into a temp dir, convert it, and keep only the Markdown."""
+        with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
+            self.book_paths = ensure_book_dirs(Path(tmp_dir))
+            self._epub_output_path = Path(tmp_dir) / (stem + _EPUB_SUFFIX)
+            logger.info("Build directory: %s", self.book_paths.book_dir)
+            epub_path = await self._build()
+            self._write_markdown(epub_path, md_path)
+        return md_path
+
+    def _write_markdown(self, epub_path: Path, md_path: Path) -> None:
+        """Convert *epub_path* into an LLM-oriented Markdown file at *md_path*."""
+        logger.info("Converting to Markdown...")
+        self._notify("markdown", 0, 1)
+        convert_epub(
+            epub_path,
+            md_path,
+            extensions=self.config.markdown_extensions,
+            force=True,
+        )
+        self._notify("markdown", 1, 1)
+        logger.info("Markdown saved to: %s", md_path)
 
     async def _prepare(self) -> None:
         """Authenticate, start keepalive, and fetch enriched book metadata."""
@@ -350,9 +386,9 @@ class BookDownloader:
             process_chapters=self._process_chapters,
         )
         async with ApiClient(self.config) as client:
-            epub_path = await builder.run(client)
-            logger.info("Done! EPUB saved to: %s", epub_path)
-            return epub_path
+            output_path = await builder.run(client)
+            logger.info("Done! Saved to: %s", output_path)
+            return output_path
 
     # ------------------------------------------------------------------
     # Chapter processing loop

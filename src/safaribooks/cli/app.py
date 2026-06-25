@@ -8,6 +8,7 @@ from rich.console import Console
 
 from safaribooks.cli import auth
 from safaribooks.cli.fetch import fetch_cmd
+from safaribooks.cli.markdown import markdown_cmd
 
 app = typer.Typer(
     name="safari",
@@ -21,6 +22,7 @@ console = Console()
 
 app.add_typer(auth.app, name="auth")
 app.command("fetch")(fetch_cmd)
+app.command("markdown")(markdown_cmd)
 
 
 @app.callback(invoke_without_command=True)

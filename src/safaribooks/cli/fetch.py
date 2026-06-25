@@ -130,6 +130,14 @@ def fetch_cmd(  # noqa: WPS211 -- one param per CLI flag; Typer has no native
         int,
         typer.Option("--rate-burst", help="Rate limiter burst capacity."),
     ] = 2,
+    markdown: Annotated[
+        bool,
+        typer.Option("--markdown", help="Also write an LLM-oriented Markdown file."),
+    ] = False,
+    markdown_only: Annotated[
+        bool,
+        typer.Option("--markdown-only", help="Write only the Markdown file, skip the EPUB."),
+    ] = False,
 ) -> None:
     """Download books from O'Reilly Learning Platform."""
     debug = (ctx.obj or {}).get("debug", False)
@@ -147,6 +155,8 @@ def fetch_cmd(  # noqa: WPS211 -- one param per CLI flag; Typer has no native
         "debug": debug,
         "rate_limit": rate_limit,
         "rate_burst": rate_burst,
+        "markdown": markdown or markdown_only,
+        "markdown_only": markdown_only,
     }
     if output_dir:
         config_kwargs["output_dir"] = output_dir

@@ -561,3 +561,60 @@ class _BuildSpy:
         self._captured["opf"] = (book_paths.oebps / "content.opf").read_bytes()
         self._captured["ncx"] = (book_paths.oebps / "toc.ncx").read_bytes()
         return build_epub(book_paths, out)
+
+
+def _md_config(tmp_path, **flags) -> AppConfig:
+    return AppConfig(
+        cookies_file=tmp_path / "cookies.json",
+        output_dir=tmp_path / "Books",
+        library_dir=tmp_path / "library",
+        **flags,
+    )
+
+
+def _stub_convert(monkeypatch) -> MagicMock:
+    """Stub convert_epub to write a placeholder .md and return its path."""
+
+    def _write(_epub, dest, **_kwargs):
+        dest.write_text("md", encoding="utf-8")
+        return dest
+
+    convert = MagicMock(side_effect=_write)
+    monkeypatch.setattr(dl, "convert_epub", convert)
+    return convert
+
+
+class TestRunMarkdown:
+    async def test_markdown_writes_md_beside_epub(self, tmp_path, monkeypatch):
+        config = _md_config(tmp_path, markdown=True)
+        _patch_pipeline(
+            monkeypatch,
+            book_info=_make_book_info(title="My Book"),
+            chapters=[_make_chapter()],
+            parse_results=[_make_parse_result()],
+        )
+        convert = _stub_convert(monkeypatch)
+
+        result = await _make_downloader(config).run()
+
+        assert result.suffix == ".epub"
+        assert result.exists()
+        md_path = config.output_dir / (result.stem + ".md")
+        assert md_path.exists()
+        convert.assert_called_once()
+
+    async def test_markdown_only_writes_only_md(self, tmp_path, monkeypatch):
+        config = _md_config(tmp_path, markdown=True, markdown_only=True)
+        _patch_pipeline(
+            monkeypatch,
+            book_info=_make_book_info(title="My Book"),
+            chapters=[_make_chapter()],
+            parse_results=[_make_parse_result()],
+        )
+        _stub_convert(monkeypatch)
+
+        result = await _make_downloader(config).run()
+
+        assert result.suffix == ".md"
+        assert result.exists()
+        assert not list(config.output_dir.glob("*.epub"))
