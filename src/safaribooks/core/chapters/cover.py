@@ -4,6 +4,8 @@ from typing import Any
 
 from lxml import html
 
+from safaribooks.core.chapters import xpath
+
 _SRC_ATTR = "src"
 
 _COVER_ATTR_PRED = (
@@ -50,9 +52,7 @@ def find_cover_image(root: html.HtmlElement) -> str | None:  # type: ignore[no-a
         ``None`` if no cover image is found.
 
     """
-    from safaribooks.core.chapters import parsing
-
-    parsing._register_lowercase_xpath()
+    xpath.register_lowercase_xpath()
 
     cover_pred = _COVER_ATTR_PRED
     alt_pred = f"{cover_pred} or contains(lower-case(@alt), 'cover')"

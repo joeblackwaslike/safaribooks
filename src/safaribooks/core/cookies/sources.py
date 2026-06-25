@@ -1,6 +1,8 @@
 """Cookie loaders: browser extraction, interactive paste, file, and header."""
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 from rich.console import Console
 from rich.prompt import Prompt
@@ -34,7 +36,7 @@ class _BrowserExtractor:
 
         return normalize_cookies({cookie.name: cookie.value for cookie in cookie_jar})
 
-    def _loaders(self) -> dict[str, object]:
+    def _loaders(self) -> dict[str, Callable[..., Any]]:
         """Return the supported ``browser_cookie3`` loader callables."""
         try:
             import browser_cookie3  # noqa: PLC0415 (optional dependency, imported lazily)

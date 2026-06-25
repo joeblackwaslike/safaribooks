@@ -7,7 +7,7 @@ from lxml import etree, html
 
 from safaribooks.core import chapters
 from safaribooks.core.exceptions import ApiError, ParsingError
-from safaribooks.core.models import TocEntry
+from safaribooks.core.models import ParseContext, TocEntry
 
 BOOK_ID = "9781234567890"
 
@@ -31,14 +31,14 @@ def _make_raw_html(body_content: str) -> html.HtmlElement:
 
 
 def _parse(root: html.HtmlElement, **overrides):
-    kwargs = {
-        "chapter_stylesheets": [],
-        "known_css": set(),
-        "book_id": BOOK_ID,
-        "base_url": _BASE_URL,
-    }
-    kwargs.update(overrides)
-    return chapters.parse_chapter_html(root, **kwargs)
+    chapter_stylesheets = overrides.pop("chapter_stylesheets", [])
+    known_css = overrides.pop("known_css", [])
+    context = ParseContext(
+        book_id=overrides.pop("book_id", BOOK_ID),
+        base_url=overrides.pop("base_url", _BASE_URL),
+        first_page=overrides.pop("first_page", False),
+    )
+    return chapters.parse_chapter_html(root, chapter_stylesheets, known_css, context)
 
 
 def _cover(markup: str):
@@ -328,7 +328,7 @@ class TestParseChapterInlineStyle:
         root = _make_html("<p>Content</p>")
         head = root.xpath("//head")[0]
         head.append(html.fromstring("<style>p{}</style>"))
-        monkeypatch.setattr(chapters.html, "tostring", _raise_parser_error)
+        monkeypatch.setattr(html, "tostring", _raise_parser_error)
         with pytest.raises(ParsingError, match="Failed to serialize inline"):
             _parse(root, known_css=[])
 
@@ -337,7 +337,7 @@ class TestParseChapterInlineStyle:
         # covering the except branch (lines 364-366). No inline <style> here,
         # so the first tostring call is the body serialization.
         root = _make_html("<p>Content</p>")
-        monkeypatch.setattr(chapters.html, "tostring", _raise_parse_error)
+        monkeypatch.setattr(html, "tostring", _raise_parse_error)
         with pytest.raises(ParsingError, match="Failed to serialize chapter body"):
             _parse(root, known_css=[])
 
@@ -458,6 +458,6 @@ class TestFetchChapterHtml:
         # An empty/whitespace body that lxml cannot parse raises ParsingError.
         # Force the parse failure path (lines 149-151) via a patched parser.
         client = _make_mock_client(_HTTP_OK, "<html></html>")
-        monkeypatch.setattr(chapters.html, "fromstring", _raise_parser_error)
+        monkeypatch.setattr(html, "fromstring", _raise_parser_error)
         with pytest.raises(ParsingError, match="Failed to parse chapter HTML"):
             await chapters.fetch_chapter_html(client, "https://example.com/ch.html")

@@ -3,6 +3,14 @@
 from pydantic import BaseModel
 
 
+class ParseContext(BaseModel):
+    """Per-chapter context controlling how a chapter is parsed and rewritten."""
+
+    book_id: str
+    base_url: str
+    first_page: bool = False
+
+
 class ParseResult(BaseModel):
     """Result of parsing a chapter's HTML content."""
 

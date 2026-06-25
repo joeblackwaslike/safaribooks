@@ -28,7 +28,7 @@ from safaribooks.core.epub import (
     write_chapter_html,
 )
 from safaribooks.core.exceptions import ApiError
-from safaribooks.core.models import BookInfo, Chapter, ParseResult
+from safaribooks.core.models import BookInfo, Chapter, ParseContext, ParseResult
 
 logger = logging.getLogger(__name__)
 
@@ -409,9 +409,11 @@ class BookDownloader:
             root,
             _ChapterAssets.stylesheet_urls(chapter),
             assets.all_css,
-            self.book_id,
-            chapter.asset_base_url,
-            first_page=first_page,
+            ParseContext(
+                book_id=self.book_id,
+                base_url=chapter.asset_base_url,
+                first_page=first_page,
+            ),
         )
 
         assets.add_parsed(parsed)
