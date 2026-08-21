@@ -28,6 +28,27 @@ _MIN_OVERFLOW_TO_STDERR = 3
 _PENDING_EMITS = 10
 
 
+def _json_lines(captured_text: str) -> list[str]:
+    """Return only the lines of ``captured_text`` that are valid JSON records.
+
+    Stderr is a shared stream: besides the batched JSON log lines under test,
+    unrelated logging infrastructure (e.g. a stale handler left behind by
+    another test's ``logging.basicConfig(force=True)`` call) may also write
+    non-JSON diagnostics there. Filtering keeps these assertions focused on
+    the records the handler under test actually emitted.
+    """
+    lines = []
+    for line in captured_text.strip().split("\n"):
+        if not line:
+            continue
+        try:
+            json.loads(line)
+        except json.JSONDecodeError:
+            continue
+        lines.append(line)
+    return lines
+
+
 class TestAsyncQueueHandler:
     async def test_start_stop(self, capsys: pytest.CaptureFixture[str]) -> None:
         queue_handler = AsyncQueueHandler(flush_interval=_FAST_FLUSH)
@@ -36,13 +57,13 @@ class TestAsyncQueueHandler:
         await queue_handler.stop()
 
         captured = capsys.readouterr()
-        assert "lifecycle" in captured.out
+        assert "lifecycle" in captured.err
 
     async def test_context_manager(self, capsys: pytest.CaptureFixture[str]) -> None:
         async with AsyncQueueHandler(flush_interval=_FAST_FLUSH) as queue_handler:
             queue_handler.emit({"message": "ctx-mgr"})
         captured = capsys.readouterr()
-        assert "ctx-mgr" in captured.out
+        assert "ctx-mgr" in captured.err
 
     async def test_emit_and_flush(self, capsys: pytest.CaptureFixture[str]) -> None:
         queue_handler = AsyncQueueHandler(flush_interval=_FAST_FLUSH)
@@ -53,7 +74,7 @@ class TestAsyncQueueHandler:
         await queue_handler.stop()
 
         captured = capsys.readouterr()
-        lines = [line for line in captured.out.strip().split("\n") if line]
+        lines = _json_lines(captured.err)
         assert len(lines) == 1
         parsed = json.loads(lines[0])
         assert parsed["message"] == "hello"
@@ -72,7 +93,7 @@ class TestAsyncQueueHandler:
         await queue_handler.stop()
 
         captured = capsys.readouterr()
-        lines = [line for line in captured.out.strip().split("\n") if line]
+        lines = _json_lines(captured.err)
         assert len(lines) == _BATCH_SIZE
 
     async def test_queue_overflow_falls_back_to_stderr(
@@ -105,7 +126,7 @@ class TestAsyncQueueHandler:
         await queue_handler.stop()
 
         captured = capsys.readouterr()
-        lines = [line for line in captured.out.strip().split("\n") if line]
+        lines = _json_lines(captured.err)
         assert len(lines) == _PENDING_EMITS
 
 
@@ -198,7 +219,7 @@ class TestConfigureAsyncLogging:
         await log_handler.stop()
 
         captured = capsys.readouterr()
-        lines = [line for line in captured.out.strip().split("\n") if line]
+        lines = _json_lines(captured.err)
         assert len(lines) >= 1
         parsed = json.loads(lines[0])
         assert parsed["message"] == "e2e test"
