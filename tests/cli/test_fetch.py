@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import click
 from typer.testing import CliRunner
 
 from safaribooks.cli import app
@@ -14,7 +15,6 @@ runner = CliRunner()
 _EXPECTED_IMAGE_MAX_SIZE = 800
 _EXPECTED_IMAGE_QUALITY = 85
 _EPUB_FILENAME = "book.epub"
-_HELP_CONSOLE_WIDTH = 200
 
 
 def _stub_downloader(
@@ -97,15 +97,16 @@ class TestFetchHelp:
         assert "--preserve-log" in output
 
     def _help_output(self) -> str:
-        # typer.rich_utils.MAX_WIDTH is computed once from $COLUMNS at import
-        # time, so a per-invoke `env=` override on CliRunner has no effect --
-        # it's already frozen by the time this test runs. Patch the constant
-        # directly so help text isn't wrapped/blanked under a narrow terminal
-        # (a real ~80-column non-tty stdout, as in CI, otherwise triggers it).
-        with patch("typer.rich_utils.MAX_WIDTH", _HELP_CONSOLE_WIDTH):
-            invoke_result = runner.invoke(app, ["fetch", "--help"])
+        # CI renders this with ANSI color codes (this shell's Rich Console
+        # detects no color support, so locally it doesn't); Typer's option
+        # highlighter then styles a flag's leading "-" separately from the
+        # rest of the name, e.g. "--playlist" becomes two ANSI-coded spans
+        # ("-" then "-playlist") with a reset sandwiched between them. That
+        # breaks a plain substring check only when color is on. Strip ANSI
+        # codes so the assertion is deterministic regardless of environment.
+        invoke_result = runner.invoke(app, ["fetch", "--help"])
         assert invoke_result.exit_code == 0
-        return invoke_result.output
+        return click.unstyle(invoke_result.output)
 
 
 class TestFetchNoArgs:

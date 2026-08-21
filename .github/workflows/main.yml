@@ -46,22 +46,6 @@ jobs:
         with:
           python-version: ${{ matrix.python-version }}
 
-      - name: DEBUG fetch --help raw output
-        run: |
-          uv run python -c "
-          from typer.testing import CliRunner
-          from safaribooks.cli import app
-          r = CliRunner().invoke(app, ['fetch', '--help'])
-          print('exit_code:', r.exit_code)
-          print('COLUMNS env:', repr(__import__('os').environ.get('COLUMNS')))
-          import shutil
-          print('terminal size:', shutil.get_terminal_size())
-          print('=== repr(output) ===')
-          print(repr(r.output))
-          print('=== raw output ===')
-          print(r.output)
-          "
-
       - name: Run tests
         run: uv run python -m pytest tests
 
