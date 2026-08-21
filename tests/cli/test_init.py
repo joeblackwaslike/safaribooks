@@ -33,7 +33,7 @@ class TestVersion:
 
     def test_version_long_flag(self):
         """``--version`` prints the package version and exits cleanly."""
-        with patch("safaribooks.cli._pkg_version", return_value="9.9.9") as mock_ver:
+        with patch("safaribooks.cli.app._pkg_version", return_value="9.9.9") as mock_ver:
             outcome = runner.invoke(app, ["--version"])
             mock_ver.assert_called_once_with("safaribookshelf")
         assert outcome.exit_code == _EXIT_OK
@@ -42,7 +42,7 @@ class TestVersion:
 
     def test_version_short_flag(self):
         """``-v`` is an alias for ``--version``."""
-        with patch("safaribooks.cli._pkg_version", return_value="1.2.3"):
+        with patch("safaribooks.cli.app._pkg_version", return_value="1.2.3"):
             outcome = runner.invoke(app, ["-v"])
         assert outcome.exit_code == _EXIT_OK
         assert "1.2.3" in outcome.output
@@ -51,7 +51,7 @@ class TestVersion:
         """Passing ``--version`` exits before any subcommand runs."""
         with (
             patch("safaribooks.cli.fetch._fetch_async") as mock_fetch,
-            patch("safaribooks.cli._pkg_version", return_value="0.0.1"),
+            patch("safaribooks.cli.app._pkg_version", return_value="0.0.1"),
         ):
             outcome = runner.invoke(app, ["--version", "fetch", "12345"])
             mock_fetch.assert_not_called()
