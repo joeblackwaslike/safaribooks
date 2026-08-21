@@ -168,8 +168,8 @@ class AsyncQueueHandler:
     async def _write_batch(self, batch: list[dict[str, Any]]) -> None:
         """Write a batch of logs (override for file/network I/O)."""
         for record in batch:
-            sys.stdout.write(_to_json_line(record))
-        sys.stdout.flush()
+            sys.stderr.write(_to_json_line(record))
+        sys.stderr.flush()
 
 
 class AsyncFileHandler(AsyncQueueHandler):
@@ -282,7 +282,7 @@ def configure_async_logging(
             _QueueRenderer(handlers),
         ],
         context_class=dict,
-        logger_factory=structlog.PrintLoggerFactory(),
+        logger_factory=structlog.ReturnLoggerFactory(),
         cache_logger_on_first_use=False,
     )
 
