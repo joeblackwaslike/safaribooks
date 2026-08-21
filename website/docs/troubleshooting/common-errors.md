@@ -15,6 +15,7 @@ Quick reference for the most frequent error messages and their solutions.
 **Cause:** Cookie file doesn't exist or is missing required cookies.
 
 **Fix:**
+
 ```bash
 safari auth setup
 # or
@@ -28,6 +29,7 @@ safari auth extract --browser chrome
 **Cause:** Session cookies have expired (typically after ~2 hours).
 
 **Fix:**
+
 ```bash
 safari auth extract --browser chrome
 safari auth validate
@@ -42,6 +44,7 @@ See [Cookie Expiry](./cookie-expiry.md) for details.
 **Cause:** Invalid book ID or the book was removed from O'Reilly.
 
 **Fix:**
+
 - Verify the book ID from the O'Reilly URL
 - Check that the book is still available on learning.oreilly.com
 - Try using the full URL instead of just the ID
@@ -53,6 +56,7 @@ See [Cookie Expiry](./cookie-expiry.md) for details.
 **Cause:** Sending requests too quickly. The retry logic handles occasional 429s, but sustained throttling exhausts retries.
 
 **Fix:**
+
 ```bash
 safari fetch --rate-limit 0.5 9781492056348
 ```
@@ -80,6 +84,7 @@ safari fetch --rate-limit 0.5 9781492056348
 **Cause:** No cookies have been set up yet.
 
 **Fix:**
+
 ```bash
 safari auth setup
 ```
@@ -91,6 +96,7 @@ safari auth setup
 **Cause:** No internet connection or O'Reilly servers are unreachable.
 
 **Fix:**
+
 - Check your internet connection
 - Try accessing learning.oreilly.com in your browser
 - If behind a VPN/proxy, check that it's connected

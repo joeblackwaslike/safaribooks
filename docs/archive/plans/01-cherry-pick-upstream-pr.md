@@ -35,16 +35,19 @@ git checkout -b cherry-pick/pr-<PR_NUMBER>
 ### 4. Cherry-pick
 
 **Single commit PR:**
+
 ```bash
 git cherry-pick <COMMIT_SHA>
 ```
 
 **Multi-commit PR (preserve each commit):**
+
 ```bash
 git cherry-pick <OLDEST_SHA>^..<NEWEST_SHA>
 ```
 
 **Multi-commit PR (squash into one):**
+
 ```bash
 git cherry-pick --no-commit <OLDEST_SHA>^..<NEWEST_SHA>
 git commit -m "Cherry-pick upstream PR #<PR_NUMBER>: <description>"

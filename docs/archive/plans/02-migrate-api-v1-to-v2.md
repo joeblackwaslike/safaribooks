@@ -13,6 +13,7 @@ PRs #371 and #356 are skipped (#371 has syntax errors; #356 is orthogonal Kindle
 ## Architecture: Adapter at the API Boundary
 
 All v2 responses are transformed into the exact v1 shapes at the API layer. Downstream code (EPUB generation, HTML parsing, image/CSS download, TOC creation) requires **zero changes**. Three adapter methods do all the work:
+
 - `get_book_info()` + `_enrich_book_metadata()` — book metadata
 - `get_book_chapters()` + `_normalize_chapter()` — chapter list
 - `create_toc()` + `normalize_toc()` — table of contents
@@ -39,6 +40,7 @@ All v2 responses are transformed into the exact v1 shapes at the API layer. Down
 **`parse_json_response(response, context)`** — from PR #370. Returns parsed JSON or `None` with proper handling for non-JSON responses, bad status codes, and parse failures.
 
 **`_normalize_chapter(v2_chapter)`** — transforms a single v2 chapter into v1-compatible dict:
+
 - `unquote()` on filename (fixes URL-encoding bug from PR #377)
 - Sets `asset_base_url` to `FILES_API_TEMPLATE` (eliminates ad-hoc v2 detection in `get()`)
 - Normalizes `images` and `stylesheets` from either top-level or `related_assets` nesting
@@ -69,11 +71,13 @@ All v2 responses are transformed into the exact v1 shapes at the API layer. Down
 The current script blindly dumps ALL browser cookies and requires `browser_cookie3` as a hard dependency. Replace with PR #377's two-mode approach:
 
 **Mode 1: Paste from console (default, zero dependencies)**
+
 - Print a JS one-liner for the user to run in their browser console on `learning.oreilly.com`
 - User pastes the JSON output, script saves to `cookies.json`
 - Handles double-encoded strings gracefully
 
 **Mode 2: Browser auto-extract (`--browser chrome|firefox|edge|chromium`)**
+
 - Uses `browser_cookie3` (optional dependency, only needed for this mode)
 - Filters to `.oreilly.com` domain only (privacy fix + smaller request headers)
 - Supports Chrome, Firefox, Edge, Chromium
@@ -87,6 +91,7 @@ The README is severely outdated — it still advertises `--cred` login as the pr
 **Replace the "Attention needed" banner** with a clear status: v2 API migration complete, cookie-based auth only.
 
 **Rewrite the Usage section** to lead with the cookie workflow:
+
 1. Log in to `https://learning.oreilly.com` in your browser
 2. Get cookies (two options presented equally):
    - **Quick way:** Open browser console → paste JS one-liner → save output as `cookies.json`
@@ -94,10 +99,15 @@ The README is severely outdated — it still advertises `--cred` login as the pr
 3. Run: `python3 safaribooks.py <BOOK_ID>`
 
 **Include the JS snippet** (from PR #373) directly in the README:
+
 ```javascript
-JSON.stringify(document.cookie.split(';').reduce((o,c) => {
-  let [k,v] = c.trim().split('='); o[k] = v; return o;
-}, {}))
+JSON.stringify(
+  document.cookie.split(";").reduce((o, c) => {
+    let [k, v] = c.trim().split("=");
+    o[k] = v;
+    return o;
+  }, {}),
+);
 ```
 
 **Remove/de-emphasize** the `--cred` and `--login` options from the help output and examples — they're dead code. Keep them in argparse for a deprecation warning but don't feature them in docs.

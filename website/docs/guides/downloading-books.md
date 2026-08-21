@@ -77,8 +77,8 @@ safari fetch 9781492056348 --file more-books.txt --output ~/library/
 
 ## Output options
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `--output` / `-o` | Output directory for EPUB files | `Books/` |
-| `--library-dir` | Central EPUB library directory | `~/.safaribooks/` |
-| `--preserve-log` | Keep log file even without errors | `false` |
+| Flag              | Description                       | Default           |
+| ----------------- | --------------------------------- | ----------------- |
+| `--output` / `-o` | Output directory for EPUB files   | `Books/`          |
+| `--library-dir`   | Central EPUB library directory    | `~/.safaribooks/` |
+| `--preserve-log`  | Keep log file even without errors | `false`           |

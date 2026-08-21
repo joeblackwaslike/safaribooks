@@ -10,13 +10,13 @@ safaribooks uses [tenacity](https://tenacity.readthedocs.io/) for automatic retr
 
 ## Retry configuration
 
-| Parameter | API Requests | Asset Downloads |
-|-----------|-------------|-----------------|
-| Max attempts | 5 | 3 |
-| Base delay | 1 second | 1 second |
-| Max delay | 60 seconds | 60 seconds |
-| Backoff | Exponential | Exponential |
-| Jitter | +/- 25% | +/- 25% |
+| Parameter    | API Requests | Asset Downloads |
+| ------------ | ------------ | --------------- |
+| Max attempts | 5            | 3               |
+| Base delay   | 1 second     | 1 second        |
+| Max delay    | 60 seconds   | 60 seconds      |
+| Backoff      | Exponential  | Exponential     |
+| Jitter       | +/- 25%      | +/- 25%         |
 
 ## Exponential backoff
 
@@ -49,14 +49,14 @@ When the server returns a `Retry-After` header (common with 429 responses), safa
 
 The following HTTP status codes trigger a retry:
 
-| Code | Meaning |
-|------|---------|
-| `408` | Request Timeout |
-| `429` | Too Many Requests |
+| Code  | Meaning               |
+| ----- | --------------------- |
+| `408` | Request Timeout       |
+| `429` | Too Many Requests     |
 | `500` | Internal Server Error |
-| `502` | Bad Gateway |
-| `503` | Service Unavailable |
-| `504` | Gateway Timeout |
+| `502` | Bad Gateway           |
+| `503` | Service Unavailable   |
+| `504` | Gateway Timeout       |
 
 All other error codes (including 401, 403, 404) raise immediately without retry.
 

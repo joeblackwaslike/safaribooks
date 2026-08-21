@@ -6,15 +6,16 @@ The safaribooks fork (on `feat/migrate-api-v2`) has several known image issues: 
 
 ## PR Triage
 
-| PR | Title | Verdict | Reason |
-|----|-------|---------|--------|
-| **#332** | Make cover art show in Apple Books library | **MERGE** | Essential 6-line fix — OPF `<meta name="cover">` must reference a manifest item ID, not a filename |
-| **#364** | Improve cover image quality + fix duplicate cover | **MERGE** | HD cover URL fallback chain + duplicate cover prevention |
-| **#120** | Support resize image and change image quality | **MERGE** | Unique feature — Pillow-based resize/compress via CLI args |
-| #203 | Use Higher Resolution image of Book Cover | **SKIP** | Massive refactor (101 lines changed) that overlaps with #364's HD cover logic and would conflict heavily with our v2 API migration |
-| #114 | Optimisation for Books app | **SKIP** | Superseded by #332; also has a Python logic bug (`if 'cover.' or 'Cover.' or 'titlepage.' in i` is always truthy) |
+| PR       | Title                                             | Verdict   | Reason                                                                                                                             |
+| -------- | ------------------------------------------------- | --------- | ---------------------------------------------------------------------------------------------------------------------------------- |
+| **#332** | Make cover art show in Apple Books library        | **MERGE** | Essential 6-line fix — OPF `<meta name="cover">` must reference a manifest item ID, not a filename                                 |
+| **#364** | Improve cover image quality + fix duplicate cover | **MERGE** | HD cover URL fallback chain + duplicate cover prevention                                                                           |
+| **#120** | Support resize image and change image quality     | **MERGE** | Unique feature — Pillow-based resize/compress via CLI args                                                                         |
+| #203     | Use Higher Resolution image of Book Cover         | **SKIP**  | Massive refactor (101 lines changed) that overlaps with #364's HD cover logic and would conflict heavily with our v2 API migration |
+| #114     | Optimisation for Books app                        | **SKIP**  | Superseded by #332; also has a Python logic bug (`if 'cover.' or 'Cover.' or 'titlepage.' in i` is always truthy)                  |
 
 The three selected PRs touch different functions with no overlap:
+
 - **#332** → `create_content_opf()` (OPF metadata)
 - **#364** → `get_default_cover()` + `__init__` cover-insertion block
 - **#120** → `_thread_download_images()` + new `_resize_image()` + CLI args
@@ -137,6 +138,7 @@ def _resize_image(self, image_path):
 #### 3d. Call `_resize_image()` in `_thread_download_images()` after writing the file (line 1082)
 
 After the `with open(image_path, 'wb')` block, add:
+
 ```python
 self._resize_image(image_path)
 ```

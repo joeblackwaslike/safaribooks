@@ -1,46 +1,46 @@
-import {themes as prismThemes} from 'prism-react-renderer';
-import type {Config} from '@docusaurus/types';
-import type * as Preset from '@docusaurus/preset-classic';
+import { themes as prismThemes } from "prism-react-renderer";
+import type { Config } from "@docusaurus/types";
+import type * as Preset from "@docusaurus/preset-classic";
 
 const config: Config = {
-  title: 'safaribooks',
-  tagline: 'Download O\'Reilly books as EPUB files',
-  favicon: 'img/favicon.ico',
+  title: "safaribooks",
+  tagline: "Download O'Reilly books as EPUB files",
+  favicon: "img/favicon.ico",
 
-  url: 'https://joeblackwaslike.github.io',
-  baseUrl: '/safaribooks/',
+  url: "https://joeblackwaslike.github.io",
+  baseUrl: "/safaribooks/",
 
-  organizationName: 'joeblackwaslike',
-  projectName: 'safaribooks',
+  organizationName: "joeblackwaslike",
+  projectName: "safaribooks",
 
-  onBrokenLinks: 'throw',
+  onBrokenLinks: "throw",
 
   markdown: {
     mermaid: true,
     hooks: {
-      onBrokenMarkdownLinks: 'warn',
+      onBrokenMarkdownLinks: "warn",
     },
   },
 
-  themes: ['@docusaurus/theme-mermaid'],
+  themes: ["@docusaurus/theme-mermaid"],
 
   i18n: {
-    defaultLocale: 'en',
-    locales: ['en'],
+    defaultLocale: "en",
+    locales: ["en"],
   },
 
   presets: [
     [
-      'classic',
+      "classic",
       {
         docs: {
-          sidebarPath: './sidebars.ts',
+          sidebarPath: "./sidebars.ts",
           editUrl:
-            'https://github.com/joeblackwaslike/safaribooks/tree/master/website/',
+            "https://github.com/joeblackwaslike/safaribooks/tree/master/website/",
         },
         blog: false,
         theme: {
-          customCss: './src/css/custom.css',
+          customCss: "./src/css/custom.css",
         },
       } satisfies Preset.Options,
     ],
@@ -48,47 +48,47 @@ const config: Config = {
 
   themeConfig: {
     colorMode: {
-      defaultMode: 'dark',
+      defaultMode: "dark",
       respectPrefersColorScheme: true,
     },
     navbar: {
-      title: 'safaribooks',
+      title: "safaribooks",
       items: [
         {
-          type: 'docSidebar',
-          sidebarId: 'docsSidebar',
-          position: 'left',
-          label: 'Docs',
+          type: "docSidebar",
+          sidebarId: "docsSidebar",
+          position: "left",
+          label: "Docs",
         },
         {
-          href: 'https://github.com/joeblackwaslike/safaribooks',
-          label: 'GitHub',
-          position: 'right',
+          href: "https://github.com/joeblackwaslike/safaribooks",
+          label: "GitHub",
+          position: "right",
         },
       ],
     },
     footer: {
-      style: 'dark',
+      style: "dark",
       links: [
         {
-          title: 'Docs',
+          title: "Docs",
           items: [
             {
-              label: 'Getting Started',
-              to: '/docs/getting-started',
+              label: "Getting Started",
+              to: "/docs/getting-started",
             },
             {
-              label: 'CLI Reference',
-              to: '/docs/reference/cli-commands',
+              label: "CLI Reference",
+              to: "/docs/reference/cli-commands",
             },
           ],
         },
         {
-          title: 'More',
+          title: "More",
           items: [
             {
-              label: 'GitHub',
-              href: 'https://github.com/joeblackwaslike/safaribooks',
+              label: "GitHub",
+              href: "https://github.com/joeblackwaslike/safaribooks",
             },
           ],
         },
@@ -98,7 +98,7 @@ const config: Config = {
     prism: {
       theme: prismThemes.github,
       darkTheme: prismThemes.dracula,
-      additionalLanguages: ['python', 'bash', 'json', 'docker', 'toml'],
+      additionalLanguages: ["python", "bash", "json", "docker", "toml"],
     },
   } satisfies Preset.ThemeConfig,
 };

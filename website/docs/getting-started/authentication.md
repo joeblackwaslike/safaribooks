@@ -10,12 +10,12 @@ safaribooks authenticates with O'Reilly using session cookies from your browser.
 
 ## Required cookies
 
-| Cookie | Purpose |
-|--------|---------|
-| `groot_sessionid` | Main session identifier |
-| `jwt` | JSON Web Token for API auth |
-| `csrf_access_token` | CSRF protection token |
-| `logged_in` | Session active flag |
+| Cookie              | Purpose                     |
+| ------------------- | --------------------------- |
+| `groot_sessionid`   | Main session identifier     |
+| `jwt`               | JSON Web Token for API auth |
+| `csrf_access_token` | CSRF protection token       |
+| `logged_in`         | Session active flag         |
 
 ## Extraction methods
 
@@ -72,10 +72,8 @@ Run this snippet in your browser console on an O'Reilly page, then import the ou
 
 ```javascript
 JSON.stringify(
-  Object.fromEntries(
-    document.cookie.split('; ').map(c => c.split('='))
-  )
-)
+  Object.fromEntries(document.cookie.split("; ").map((c) => c.split("="))),
+);
 ```
 
 Copy the output to a file and use `safari auth import --file`.

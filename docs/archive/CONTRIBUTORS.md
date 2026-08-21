@@ -358,19 +358,19 @@ Clean, minimal Dockerfile approach. Being modernized for Python 3.11+, cookie-ba
 
 These PRs were carefully evaluated but not included — either because they conflicted with our architecture, were superseded by better approaches, or had issues that prevented direct use. We still appreciate the effort and ideas behind each one.
 
-| PR | Author | Title | Why not adopted |
-|----|--------|-------|-----------------|
-| [#371](https://github.com/lorenzodifuccia/safaribooks/pull/371) | [A Farzat](https://github.com/Farzat07) | Switch to API v2 | Syntax errors prevented direct use |
-| [#356](https://github.com/lorenzodifuccia/safaribooks/pull/356) | [Bhatt Umang](https://github.com/bhattumang7) | V2 bug fixes | Orthogonal Kindle/encoding fixes, not a v2 migration |
-| [#351](https://github.com/lorenzodifuccia/safaribooks/pull/351) | [Jason Zhu](https://github.com/jasonz-ncc42) | Manual cookie.json setup | Obsolete — covered by our cookie guide |
-| [#350](https://github.com/lorenzodifuccia/safaribooks/pull/350) | [@821wkli](https://github.com/821wkli) | Fixed login with --cred | Endpoint is dead; community suggestion for `browser_cookie3` was noted |
-| [#325](https://github.com/lorenzodifuccia/safaribooks/pull/325) | [sontek](https://github.com/sontek) | BeautifulSoup for M1 ARM | Heavy dependency; M1 lxml issues resolved in newer versions; PR #347 is lighter |
-| [#320](https://github.com/lorenzodifuccia/safaribooks/pull/320) | [@0xHanan](https://github.com/0xHanan) | Fix staticmethod crash | Method doesn't exist in our codebase |
-| [#207](https://github.com/lorenzodifuccia/safaribooks/pull/207) | [Anoop Hallur](https://github.com/anooprh) | Download all books in a topic | Breaking arg change; topic downloads too broad; #354 covers batch use cases |
-| [#203](https://github.com/lorenzodifuccia/safaribooks/pull/203) | [Avicienna Ulhaq](https://github.com/noxymon) | Higher resolution cover | Massive refactor overlapping with #364; conflicts with v2 migration |
-| [#114](https://github.com/lorenzodifuccia/safaribooks/pull/114) | [xyl1null](https://github.com/xyl1null) | Optimisation for Books app | Superseded by #332; contains a Python logic bug |
-| [#68](https://github.com/lorenzodifuccia/safaribooks/pull/68) | [Guilherme J. Tramontina](https://github.com/gtramontina) | Dockerize (2019) | Superseded by #342 |
-| [#25](https://github.com/lorenzodifuccia/safaribooks/pull/25) | [Eduardo Minguez](https://github.com/e-minguez) | Dockerfile (2018) | Superseded by #342; maintainer declined original |
+| PR                                                              | Author                                                    | Title                         | Why not adopted                                                                 |
+| --------------------------------------------------------------- | --------------------------------------------------------- | ----------------------------- | ------------------------------------------------------------------------------- |
+| [#371](https://github.com/lorenzodifuccia/safaribooks/pull/371) | [A Farzat](https://github.com/Farzat07)                   | Switch to API v2              | Syntax errors prevented direct use                                              |
+| [#356](https://github.com/lorenzodifuccia/safaribooks/pull/356) | [Bhatt Umang](https://github.com/bhattumang7)             | V2 bug fixes                  | Orthogonal Kindle/encoding fixes, not a v2 migration                            |
+| [#351](https://github.com/lorenzodifuccia/safaribooks/pull/351) | [Jason Zhu](https://github.com/jasonz-ncc42)              | Manual cookie.json setup      | Obsolete — covered by our cookie guide                                          |
+| [#350](https://github.com/lorenzodifuccia/safaribooks/pull/350) | [@821wkli](https://github.com/821wkli)                    | Fixed login with --cred       | Endpoint is dead; community suggestion for `browser_cookie3` was noted          |
+| [#325](https://github.com/lorenzodifuccia/safaribooks/pull/325) | [sontek](https://github.com/sontek)                       | BeautifulSoup for M1 ARM      | Heavy dependency; M1 lxml issues resolved in newer versions; PR #347 is lighter |
+| [#320](https://github.com/lorenzodifuccia/safaribooks/pull/320) | [@0xHanan](https://github.com/0xHanan)                    | Fix staticmethod crash        | Method doesn't exist in our codebase                                            |
+| [#207](https://github.com/lorenzodifuccia/safaribooks/pull/207) | [Anoop Hallur](https://github.com/anooprh)                | Download all books in a topic | Breaking arg change; topic downloads too broad; #354 covers batch use cases     |
+| [#203](https://github.com/lorenzodifuccia/safaribooks/pull/203) | [Avicienna Ulhaq](https://github.com/noxymon)             | Higher resolution cover       | Massive refactor overlapping with #364; conflicts with v2 migration             |
+| [#114](https://github.com/lorenzodifuccia/safaribooks/pull/114) | [xyl1null](https://github.com/xyl1null)                   | Optimisation for Books app    | Superseded by #332; contains a Python logic bug                                 |
+| [#68](https://github.com/lorenzodifuccia/safaribooks/pull/68)   | [Guilherme J. Tramontina](https://github.com/gtramontina) | Dockerize (2019)              | Superseded by #342                                                              |
+| [#25](https://github.com/lorenzodifuccia/safaribooks/pull/25)   | [Eduardo Minguez](https://github.com/e-minguez)           | Dockerfile (2018)             | Superseded by #342; maintainer declined original                                |
 
 ---
 
@@ -387,41 +387,41 @@ The implementation plans are preserved in [`docs/plans/`](plans/) for full trans
 
 ### Plan Index
 
-| # | Plan | PRs Referenced |
-|---|------|---------------|
-| 1 | [Cherry-Pick Upstream PR](plans/01-cherry-pick-upstream-pr.md) | General procedure |
-| 2 | [Migrate API v1 to v2](plans/02-migrate-api-v1-to-v2.md) | #379, #377, #370, #373 |
-| 3 | [Unified Cookie Auth System](plans/03-unified-cookie-auth-system.md) | #373, #256, #32, #350 |
-| 4 | [Image Quality & Apple Books Fixes](plans/04-image-quality-apple-books-fixes.md) | #332, #364, #120, #203, #114 |
-| 5 | [Upstream PR Evaluation](plans/05-upstream-pr-evaluation.md) | #165, #308, #347, #276, #343, #354, #89, #204, #365, #342, #372, #166, #207, #325, #320, #68, #25 |
+| #   | Plan                                                                             | PRs Referenced                                                                                    |
+| --- | -------------------------------------------------------------------------------- | ------------------------------------------------------------------------------------------------- |
+| 1   | [Cherry-Pick Upstream PR](plans/01-cherry-pick-upstream-pr.md)                   | General procedure                                                                                 |
+| 2   | [Migrate API v1 to v2](plans/02-migrate-api-v1-to-v2.md)                         | #379, #377, #370, #373                                                                            |
+| 3   | [Unified Cookie Auth System](plans/03-unified-cookie-auth-system.md)             | #373, #256, #32, #350                                                                             |
+| 4   | [Image Quality & Apple Books Fixes](plans/04-image-quality-apple-books-fixes.md) | #332, #364, #120, #203, #114                                                                      |
+| 5   | [Upstream PR Evaluation](plans/05-upstream-pr-evaluation.md)                     | #165, #308, #347, #276, #343, #354, #89, #204, #365, #342, #372, #166, #207, #325, #320, #68, #25 |
 
 ---
 
 ## All Referenced PRs at a Glance
 
-| PR | Author | Status in Fork | Category |
-|----|--------|---------------|----------|
-| [#379](https://github.com/lorenzodifuccia/safaribooks/pull/379) | [@wraymo](https://github.com/wraymo) | **Adopted** — core v2 migration | API |
-| [#377](https://github.com/lorenzodifuccia/safaribooks/pull/377) | [@sohailnajar](https://github.com/sohailnajar) | **Adopted** — metadata + cookies | API + Auth |
-| [#370](https://github.com/lorenzodifuccia/safaribooks/pull/370) | [@frozenprocess](https://github.com/frozenprocess) | **Adopted** — error handling | API |
-| [#373](https://github.com/lorenzodifuccia/safaribooks/pull/373) | [@AntonBronnfjell](https://github.com/AntonBronnfjell) | **Adopted** — JS snippet docs | Auth |
+| PR                                                              | Author                                                 | Status in Fork                   | Category       |
+| --------------------------------------------------------------- | ------------------------------------------------------ | -------------------------------- | -------------- |
+| [#379](https://github.com/lorenzodifuccia/safaribooks/pull/379) | [@wraymo](https://github.com/wraymo)                   | **Adopted** — core v2 migration  | API            |
+| [#377](https://github.com/lorenzodifuccia/safaribooks/pull/377) | [@sohailnajar](https://github.com/sohailnajar)         | **Adopted** — metadata + cookies | API + Auth     |
+| [#370](https://github.com/lorenzodifuccia/safaribooks/pull/370) | [@frozenprocess](https://github.com/frozenprocess)     | **Adopted** — error handling     | API            |
+| [#373](https://github.com/lorenzodifuccia/safaribooks/pull/373) | [@AntonBronnfjell](https://github.com/AntonBronnfjell) | **Adopted** — JS snippet docs    | Auth           |
 | [#372](https://github.com/lorenzodifuccia/safaribooks/pull/372) | [@AntonBronnfjell](https://github.com/AntonBronnfjell) | **Partial** — SSL-skip flag only | Error handling |
-| [#332](https://github.com/lorenzodifuccia/safaribooks/pull/332) | [@stevenl](https://github.com/stevenl) | **Adopted** — Apple Books fix | EPUB quality |
-| [#364](https://github.com/lorenzodifuccia/safaribooks/pull/364) | [@realrisman](https://github.com/realrisman) | **Adopted** — HD covers | EPUB quality |
-| [#120](https://github.com/lorenzodifuccia/safaribooks/pull/120) | [@tuanchauict](https://github.com/tuanchauict) | **Adopted** — image resize | EPUB quality |
-| [#256](https://github.com/lorenzodifuccia/safaribooks/pull/256) | [@juanmougan](https://github.com/juanmougan) | **Adopted** — cookie format | Auth |
-| [#32](https://github.com/lorenzodifuccia/safaribooks/pull/32) | [@dafalcon](https://github.com/dafalcon) | **Adopted** — header parsing | Auth |
-| [#165](https://github.com/lorenzodifuccia/safaribooks/pull/165) | [@spacewander](https://github.com/spacewander) | **Adopted** — CSS crash fix | Bug fix |
-| [#166](https://github.com/lorenzodifuccia/safaribooks/pull/166) | [@spacewander](https://github.com/spacewander) | **Partial** — error pattern | Bug fix |
-| [#308](https://github.com/lorenzodifuccia/safaribooks/pull/308) | [@darren-gibson](https://github.com/darren-gibson) | **Adopted** — link fix | Bug fix |
-| [#347](https://github.com/lorenzodifuccia/safaribooks/pull/347) | [@dreampuf](https://github.com/dreampuf) | **Adopted** — HTML fallback | Bug fix |
-| [#276](https://github.com/lorenzodifuccia/safaribooks/pull/276) | [@holzkohlengrill](https://github.com/holzkohlengrill) | **Adopted** — URL extraction | QoL |
-| [#343](https://github.com/lorenzodifuccia/safaribooks/pull/343) | [@chuxiuhong](https://github.com/chuxiuhong) | **Adopted** — fonts | Feature |
-| [#354](https://github.com/lorenzodifuccia/safaribooks/pull/354) | [@amit-gp](https://github.com/amit-gp) | **Adopted** — playlists | Feature |
-| [#89](https://github.com/lorenzodifuccia/safaribooks/pull/89) | [@detvdl](https://github.com/detvdl) | **Adopted** — multi-ID concept | Feature |
-| [#204](https://github.com/lorenzodifuccia/safaribooks/pull/204) | [@diegorodriguezv](https://github.com/diegorodriguezv) | **Adopted** — async downloads | Performance |
-| [#365](https://github.com/lorenzodifuccia/safaribooks/pull/365) | [@dsouzaankit](https://github.com/dsouzaankit) | **Adopted** — video support | Feature |
-| [#342](https://github.com/lorenzodifuccia/safaribooks/pull/342) | [@ukazap](https://github.com/ukazap) | **Adopted** — Docker | DevOps |
+| [#332](https://github.com/lorenzodifuccia/safaribooks/pull/332) | [@stevenl](https://github.com/stevenl)                 | **Adopted** — Apple Books fix    | EPUB quality   |
+| [#364](https://github.com/lorenzodifuccia/safaribooks/pull/364) | [@realrisman](https://github.com/realrisman)           | **Adopted** — HD covers          | EPUB quality   |
+| [#120](https://github.com/lorenzodifuccia/safaribooks/pull/120) | [@tuanchauict](https://github.com/tuanchauict)         | **Adopted** — image resize       | EPUB quality   |
+| [#256](https://github.com/lorenzodifuccia/safaribooks/pull/256) | [@juanmougan](https://github.com/juanmougan)           | **Adopted** — cookie format      | Auth           |
+| [#32](https://github.com/lorenzodifuccia/safaribooks/pull/32)   | [@dafalcon](https://github.com/dafalcon)               | **Adopted** — header parsing     | Auth           |
+| [#165](https://github.com/lorenzodifuccia/safaribooks/pull/165) | [@spacewander](https://github.com/spacewander)         | **Adopted** — CSS crash fix      | Bug fix        |
+| [#166](https://github.com/lorenzodifuccia/safaribooks/pull/166) | [@spacewander](https://github.com/spacewander)         | **Partial** — error pattern      | Bug fix        |
+| [#308](https://github.com/lorenzodifuccia/safaribooks/pull/308) | [@darren-gibson](https://github.com/darren-gibson)     | **Adopted** — link fix           | Bug fix        |
+| [#347](https://github.com/lorenzodifuccia/safaribooks/pull/347) | [@dreampuf](https://github.com/dreampuf)               | **Adopted** — HTML fallback      | Bug fix        |
+| [#276](https://github.com/lorenzodifuccia/safaribooks/pull/276) | [@holzkohlengrill](https://github.com/holzkohlengrill) | **Adopted** — URL extraction     | QoL            |
+| [#343](https://github.com/lorenzodifuccia/safaribooks/pull/343) | [@chuxiuhong](https://github.com/chuxiuhong)           | **Adopted** — fonts              | Feature        |
+| [#354](https://github.com/lorenzodifuccia/safaribooks/pull/354) | [@amit-gp](https://github.com/amit-gp)                 | **Adopted** — playlists          | Feature        |
+| [#89](https://github.com/lorenzodifuccia/safaribooks/pull/89)   | [@detvdl](https://github.com/detvdl)                   | **Adopted** — multi-ID concept   | Feature        |
+| [#204](https://github.com/lorenzodifuccia/safaribooks/pull/204) | [@diegorodriguezv](https://github.com/diegorodriguezv) | **Adopted** — async downloads    | Performance    |
+| [#365](https://github.com/lorenzodifuccia/safaribooks/pull/365) | [@dsouzaankit](https://github.com/dsouzaankit)         | **Adopted** — video support      | Feature        |
+| [#342](https://github.com/lorenzodifuccia/safaribooks/pull/342) | [@ukazap](https://github.com/ukazap)                   | **Adopted** — Docker             | DevOps         |
 
 ---
 
@@ -431,4 +431,4 @@ This fork is based on [lorenzodifuccia/safaribooks](https://github.com/lorenzodi
 
 ---
 
-*Last updated: June 2026*
+_Last updated: June 2026_

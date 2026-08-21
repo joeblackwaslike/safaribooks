@@ -1,7 +1,5 @@
 # safaribooks
 
-
-
 ## Stack
 
 - **Language:** Python (uv for dependency management)

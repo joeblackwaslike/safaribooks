@@ -5,6 +5,7 @@
 O'Reilly blocked programmatic login, so the tool depends entirely on browser-extracted cookies. Our fork (branch `feat/migrate-api-v2`) already has the v2 API migration and a basic `retrieve_cookies.py` with paste and browser-auto modes. But the current cookie workflow has significant gaps: only two input formats, no validation, destructive behavior on expiry (deletes `cookies.json`), no mid-download recovery, and sparse docs.
 
 Six upstream PRs were analyzed. The best ideas come from:
+
 - **PR #373** — clear cookie extraction documentation and headless environment instructions
 - **PR #256** — EditThisCookie extension JSON parser (array-of-objects format)
 - **PR #32** — raw `Cookie:` header string parser from Network panel
@@ -27,6 +28,7 @@ Absorb the parsing logic from PRs #256 and #32 into the existing file. No new sc
 1. **Add `from_header(raw)` function** — parses raw `Cookie: k1=v1; k2=v2` header strings (PR #32 idea). Split on `; `, split each on first `=`, handle `Cookie: ` prefix if present.
 
 2. **Add `from_file(filepath)` function** — reads a file and auto-detects format:
+
    - JSON dict → use directly (our flat format)
    - JSON array of `{name, value, domain}` objects → convert (PR #256 EditThisCookie format), filter to `.oreilly.com`
    - Not valid JSON → try parsing as raw cookie header string
@@ -46,10 +48,11 @@ Absorb the parsing logic from PRs #256 and #32 into the existing file. No new sc
 **Files: `retrieve_cookies.py` + `safaribooks.py`**
 
 1. **Add `validate_cookies(cookies_dict)` in `retrieve_cookies.py`** — returns `(is_valid, warnings)`. Checks:
+
    - At least 3 cookies present
    - At least one cookie name containing "session", "jwt", "token", "logged", or "csrf" (heuristic, resilient to name changes)
    - No empty-value cookies
-   
+
 2. **Run validation after every extraction** in `retrieve_cookies.py` — give immediate feedback before saving.
 
 3. **Add `--validate` flag** — loads existing `cookies.json`, runs validation, optionally hits profile URL to confirm session is live.
@@ -81,6 +84,7 @@ Absorb the parsing logic from PRs #256 and #32 into the existing file. No new sc
 **File: `README.md`**
 
 Rewrite the "Getting Cookies" section with five clearly numbered methods:
+
 1. **Paste mode** (recommended) — JS console snippet → paste into `retrieve_cookies.py`
 2. **Raw cookie header** — copy from Network panel → `--header` flag
 3. **Browser extension export** — EditThisCookie → `--file` flag
@@ -93,11 +97,11 @@ Add troubleshooting section (Out-of-Session, no cookies found, browser lock file
 
 ## Files to Modify
 
-| File | Changes |
-|------|---------|
-| `retrieve_cookies.py` | Add `from_header()`, `from_file()`, `validate_cookies()`, `_normalize_cookies()`, enhance `from_paste()`, new CLI flags |
-| `safaribooks.py` | Pre-flight validation, fix `api_error()` backup-not-delete, add `_try_cookie_refresh()`, retry logic in `requests_provider()`, cookie scrubbing in logs |
-| `README.md` | Rewrite auth/cookie section with all methods, troubleshooting, security notes |
+| File                  | Changes                                                                                                                                                 |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `retrieve_cookies.py` | Add `from_header()`, `from_file()`, `validate_cookies()`, `_normalize_cookies()`, enhance `from_paste()`, new CLI flags                                 |
+| `safaribooks.py`      | Pre-flight validation, fix `api_error()` backup-not-delete, add `_try_cookie_refresh()`, retry logic in `requests_provider()`, cookie scrubbing in logs |
+| `README.md`           | Rewrite auth/cookie section with all methods, troubleshooting, security notes                                                                           |
 
 ## Existing Code to Reuse
 

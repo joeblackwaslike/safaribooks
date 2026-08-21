@@ -92,16 +92,19 @@ docker run --rm \
 ## Quick Start
 
 1. **Set up authentication** -- paste cookies from your browser:
+
    ```bash
    safari auth setup
    ```
 
 2. **Download a book by ID:**
+
    ```bash
    safari fetch 9781491958698
    ```
 
 3. **Download an entire playlist:**
+
    ```bash
    safari fetch --playlist 6f612b99-bebc-41e1-8fff-6b655507b7af
    ```
@@ -127,32 +130,32 @@ See the [archived contributors page](docs/archive/CONTRIBUTORS.md) for full cred
 
 ### Commands
 
-| Command | Description |
-|---------|-------------|
-| `safari fetch <IDs/URLs/titles>` | Download books by ID, URL, or title search |
-| `safari fetch --playlist UUID` | Download all books from a playlist |
-| `safari fetch --file list.txt` | Batch download from a file |
-| `safari auth setup` | Interactive cookie paste (auto-detects format) |
-| `safari auth extract --browser chrome` | Auto-extract cookies from browser |
-| `safari auth import --header "Cookie: ..."` | Import from raw cookie header |
-| `safari auth import --file cookies.json` | Import from file (JSON or extension format) |
-| `safari auth validate` | Check if cookies are still valid |
-| `safari auth status` | Show cookie file location and info |
+| Command                                     | Description                                    |
+| ------------------------------------------- | ---------------------------------------------- |
+| `safari fetch <IDs/URLs/titles>`            | Download books by ID, URL, or title search     |
+| `safari fetch --playlist UUID`              | Download all books from a playlist             |
+| `safari fetch --file list.txt`              | Batch download from a file                     |
+| `safari auth setup`                         | Interactive cookie paste (auto-detects format) |
+| `safari auth extract --browser chrome`      | Auto-extract cookies from browser              |
+| `safari auth import --header "Cookie: ..."` | Import from raw cookie header                  |
+| `safari auth import --file cookies.json`    | Import from file (JSON or extension format)    |
+| `safari auth validate`                      | Check if cookies are still valid               |
+| `safari auth status`                        | Show cookie file location and info             |
 
 ### Fetch Options
 
-| Option | Default | Description |
-|--------|---------|-------------|
-| `--kindle` | off | Add Kindle-compatible CSS for e-readers |
-| `--output` / `-o` | `Books/` | Output directory |
-| `--library-dir` | `~/.safaribooks/` | Central library for collected EPUBs |
-| `--rate-limit` / `-r` | `1.0` | Max requests per second (0=unlimited) |
-| `--rate-burst` | `2` | Rate limiter burst capacity |
-| `--image-max-size` | `0` | Resize images if dimension exceeds N pixels (0=no resize) |
-| `--image-quality` | `0` | JPEG compression quality 1-95 (0=keep original) |
-| `--ssl-skip` | off | Skip SSL certificate verification |
-| `--preserve-log` | off | Keep log file even without errors |
-| `--debug` | off | Enable debug logging |
+| Option                | Default           | Description                                               |
+| --------------------- | ----------------- | --------------------------------------------------------- |
+| `--kindle`            | off               | Add Kindle-compatible CSS for e-readers                   |
+| `--output` / `-o`     | `Books/`          | Output directory                                          |
+| `--library-dir`       | `~/.safaribooks/` | Central library for collected EPUBs                       |
+| `--rate-limit` / `-r` | `1.0`             | Max requests per second (0=unlimited)                     |
+| `--rate-burst`        | `2`               | Rate limiter burst capacity                               |
+| `--image-max-size`    | `0`               | Resize images if dimension exceeds N pixels (0=no resize) |
+| `--image-quality`     | `0`               | JPEG compression quality 1-95 (0=keep original)           |
+| `--ssl-skip`          | off               | Skip SSL certificate verification                         |
+| `--preserve-log`      | off               | Keep log file even without errors                         |
+| `--debug`             | off               | Enable debug logging                                      |
 
 ---
 
@@ -184,10 +187,14 @@ safari auth setup
 Auto-detects JSON dict, browser extension export, or raw cookie header. Get JSON from your browser console:
 
 ```javascript
-JSON.stringify(document.cookie.split(';').reduce((o,c) => {
-  c = c.trim(); let i = c.indexOf('=');
-  o[c.substring(0, i)] = c.substring(i + 1); return o;
-}, {}))
+JSON.stringify(
+  document.cookie.split(";").reduce((o, c) => {
+    c = c.trim();
+    let i = c.indexOf("=");
+    o[c.substring(0, i)] = c.substring(i + 1);
+    return o;
+  }, {}),
+);
 ```
 
 ### Method 3: Raw Cookie Header
@@ -221,12 +228,12 @@ Required cookies: `groot_sessionid`, `jwt`, `csrf_access_token`, `logged_in`.
 
 ### Troubleshooting
 
-| Problem | Solution |
-|---------|----------|
+| Problem                | Solution                                                                                      |
+| ---------------------- | --------------------------------------------------------------------------------------------- |
 | "Out-of-Session" error | Cookies expired (~2 hours). Re-extract, or set `SAFARI_AUTO_REFRESH_BROWSER` to auto-recover. |
-| "No cookies found" | Make sure you're logged in at learning.oreilly.com |
-| Browser extract fails | Close browser first, or use paste mode |
-| Download interrupted | Session expired mid-download. Keepalive pings run automatically every 5 min to prevent this. |
+| "No cookies found"     | Make sure you're logged in at learning.oreilly.com                                            |
+| Browser extract fails  | Close browser first, or use paste mode                                                        |
+| Download interrupted   | Session expired mid-download. Keepalive pings run automatically every 5 min to prevent this.  |
 
 > **Security warning:** `cookies.json` contains your active session -- treat it like a password. It's in `.gitignore`.
 
@@ -236,17 +243,17 @@ Required cookies: `groot_sessionid`, `jwt`, `csrf_access_token`, `logged_in`.
 
 All settings can be set via environment variables with the `SAFARI_` prefix (powered by pydantic-settings):
 
-| Env Var | CLI Flag | Default | Description |
-|---------|----------|---------|-------------|
-| `SAFARI_COOKIES_FILE` | -- | `~/.config/safaribooks/cookies.json` | Cookie file path |
-| `SAFARI_OUTPUT_DIR` | `--output` | `Books/` | Output directory |
-| `SAFARI_LIBRARY_DIR` | `--library-dir` | `~/.safaribooks/` | Central library |
-| `SAFARI_KINDLE` | `--kindle` | `false` | Kindle mode |
-| `SAFARI_RATE_LIMIT` | `--rate-limit` | `1.0` | Requests per second |
-| `SAFARI_RATE_BURST` | `--rate-burst` | `2` | Burst capacity |
-| `SAFARI_AUTO_REFRESH_BROWSER` | -- | `None` | Auto re-extract cookies on expiry (`chrome`/`firefox`/`edge`/`chromium`) |
-| `SAFARI_KEEPALIVE_INTERVAL` | -- | `300` | Seconds between session keepalive pings during downloads (`0`=disabled) |
-| `SAFARI_DEBUG` | `--debug` | `false` | Debug logging |
+| Env Var                       | CLI Flag        | Default                              | Description                                                              |
+| ----------------------------- | --------------- | ------------------------------------ | ------------------------------------------------------------------------ |
+| `SAFARI_COOKIES_FILE`         | --              | `~/.config/safaribooks/cookies.json` | Cookie file path                                                         |
+| `SAFARI_OUTPUT_DIR`           | `--output`      | `Books/`                             | Output directory                                                         |
+| `SAFARI_LIBRARY_DIR`          | `--library-dir` | `~/.safaribooks/`                    | Central library                                                          |
+| `SAFARI_KINDLE`               | `--kindle`      | `false`                              | Kindle mode                                                              |
+| `SAFARI_RATE_LIMIT`           | `--rate-limit`  | `1.0`                                | Requests per second                                                      |
+| `SAFARI_RATE_BURST`           | `--rate-burst`  | `2`                                  | Burst capacity                                                           |
+| `SAFARI_AUTO_REFRESH_BROWSER` | --              | `None`                               | Auto re-extract cookies on expiry (`chrome`/`firefox`/`edge`/`chromium`) |
+| `SAFARI_KEEPALIVE_INTERVAL`   | --              | `300`                                | Seconds between session keepalive pings during downloads (`0`=disabled)  |
+| `SAFARI_DEBUG`                | `--debug`       | `false`                              | Debug logging                                                            |
 
 ---
 

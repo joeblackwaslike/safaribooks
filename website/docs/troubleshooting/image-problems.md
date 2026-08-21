@@ -23,6 +23,7 @@ Issues with images in downloaded EPUBs and how to resolve them.
 **Cause:** The `Pillow` library is not installed. Image processing requires Pillow, and the flags are silently ignored without it.
 
 **Fix:**
+
 ```bash
 # If installed via uv
 uv tool install 'safaribooks[images]'

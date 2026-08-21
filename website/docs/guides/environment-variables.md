@@ -10,18 +10,18 @@ All safaribooks settings can be configured via environment variables with the `S
 
 ## Available variables
 
-| Variable | CLI Flag | Type | Default | Description |
-|----------|----------|------|---------|-------------|
-| `SAFARI_OUTPUT_DIR` | `--output` | `path` | `Books/` | Output directory for EPUBs |
-| `SAFARI_LIBRARY_DIR` | `--library-dir` | `path` | `~/.safaribooks/` | Central EPUB library |
-| `SAFARI_RATE_LIMIT` | `--rate-limit` | `float` | `1.0` | Max requests per second |
-| `SAFARI_RATE_BURST` | `--rate-burst` | `int` | `2` | Burst capacity |
-| `SAFARI_KINDLE` | `--kindle` | `bool` | `false` | Add Kindle-compatible CSS |
-| `SAFARI_IMAGE_MAX_SIZE` | `--image-max-size` | `int` | `0` | Max image dimension (0=no resize) |
-| `SAFARI_IMAGE_QUALITY` | `--image-quality` | `int` | `0` | JPEG quality 1-95 (0=original) |
-| `SAFARI_SSL_SKIP` | `--ssl-skip` | `bool` | `false` | Skip SSL verification |
-| `SAFARI_PRESERVE_LOG` | `--preserve-log` | `bool` | `false` | Keep log file even without errors |
-| `SAFARI_DEBUG` | `--debug` | `bool` | `false` | Enable debug logging |
+| Variable                | CLI Flag           | Type    | Default           | Description                       |
+| ----------------------- | ------------------ | ------- | ----------------- | --------------------------------- |
+| `SAFARI_OUTPUT_DIR`     | `--output`         | `path`  | `Books/`          | Output directory for EPUBs        |
+| `SAFARI_LIBRARY_DIR`    | `--library-dir`    | `path`  | `~/.safaribooks/` | Central EPUB library              |
+| `SAFARI_RATE_LIMIT`     | `--rate-limit`     | `float` | `1.0`             | Max requests per second           |
+| `SAFARI_RATE_BURST`     | `--rate-burst`     | `int`   | `2`               | Burst capacity                    |
+| `SAFARI_KINDLE`         | `--kindle`         | `bool`  | `false`           | Add Kindle-compatible CSS         |
+| `SAFARI_IMAGE_MAX_SIZE` | `--image-max-size` | `int`   | `0`               | Max image dimension (0=no resize) |
+| `SAFARI_IMAGE_QUALITY`  | `--image-quality`  | `int`   | `0`               | JPEG quality 1-95 (0=original)    |
+| `SAFARI_SSL_SKIP`       | `--ssl-skip`       | `bool`  | `false`           | Skip SSL verification             |
+| `SAFARI_PRESERVE_LOG`   | `--preserve-log`   | `bool`  | `false`           | Keep log file even without errors |
+| `SAFARI_DEBUG`          | `--debug`          | `bool`  | `false`           | Enable debug logging              |
 
 ## Using a `.env` file
 

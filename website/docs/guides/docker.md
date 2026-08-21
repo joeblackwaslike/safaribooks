@@ -28,11 +28,11 @@ docker run --rm \
   safaribooks safari fetch 9781492056348
 ```
 
-| Mount / Env | Purpose |
-|-------------|---------|
-| `$(pwd)/cookies.json:/app/cookies.json` | Cookie file (read-only) |
+| Mount / Env                             | Purpose                            |
+| --------------------------------------- | ---------------------------------- |
+| `$(pwd)/cookies.json:/app/cookies.json` | Cookie file (read-only)            |
 | `SAFARI_COOKIES_FILE=/app/cookies.json` | Tell the app where to find cookies |
-| `$(pwd)/Books:/app/Books` | Output directory for EPUBs |
+| `$(pwd)/Books:/app/Books`               | Output directory for EPUBs         |
 
 :::tip
 Set up cookies on your host machine first with `safari auth extract`, then mount the cookie file into the container.

@@ -10,9 +10,11 @@ safaribooks can resize and compress images during download to reduce EPUB file s
 
 :::warning
 Image processing requires the `Pillow` library. Install it with:
+
 ```bash
 uv tool install 'safaribooks[images]'
 ```
+
 :::
 
 ## Maximum image size
@@ -49,9 +51,9 @@ This is useful for e-ink devices where high-resolution images provide no visible
 
 ## Recommended settings
 
-| Use case | `--image-max-size` | `--image-quality` |
-|----------|-------------------|-------------------|
-| Desktop/tablet reading | `0` (default) | `0` (default) |
-| Kindle/e-ink | `800` | `75` |
-| Minimal file size | `600` | `60` |
-| Archival quality | `0` | `0` |
+| Use case               | `--image-max-size` | `--image-quality` |
+| ---------------------- | ------------------ | ----------------- |
+| Desktop/tablet reading | `0` (default)      | `0` (default)     |
+| Kindle/e-ink           | `800`              | `75`              |
+| Minimal file size      | `600`              | `60`              |
+| Archival quality       | `0`                | `0`               |

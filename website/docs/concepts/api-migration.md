@@ -14,14 +14,14 @@ The original safaribooks (and many forks) used the v1 API at `https://learning.o
 
 ## What changed
 
-| Aspect | v1 API | v2 API |
-|--------|--------|--------|
-| Base URL | `/api/v1/` | `/api/v2/` |
-| Book info | `/api/v1/book/{id}/` | `/api/v2/epubs/urn:orm:book:{id}/` |
-| Chapters | `/api/v1/book/{id}/chapter/` | Embedded in book info response |
-| Flat chapters | Single endpoint, flat list | Nested TOC structure, recursive parsing |
-| Search | `/api/v1/search/` | `/api/v2/search/` |
-| Authentication | Same cookie-based | Same cookie-based |
+| Aspect         | v1 API                       | v2 API                                  |
+| -------------- | ---------------------------- | --------------------------------------- |
+| Base URL       | `/api/v1/`                   | `/api/v2/`                              |
+| Book info      | `/api/v1/book/{id}/`         | `/api/v2/epubs/urn:orm:book:{id}/`      |
+| Chapters       | `/api/v1/book/{id}/chapter/` | Embedded in book info response          |
+| Flat chapters  | Single endpoint, flat list   | Nested TOC structure, recursive parsing |
+| Search         | `/api/v1/search/`            | `/api/v2/search/`                       |
+| Authentication | Same cookie-based            | Same cookie-based                       |
 
 ## Adapter layer
 

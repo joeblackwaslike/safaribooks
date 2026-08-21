@@ -64,8 +64,8 @@ You should see the version number printed to the terminal.
 
 ## Optional dependencies
 
-| Package | Purpose |
-|---------|---------|
+| Package  | Purpose                                                                         |
+| -------- | ------------------------------------------------------------------------------- |
 | `Pillow` | Image resizing and quality optimization (`--image-max-size`, `--image-quality`) |
 
 Install optional dependencies:

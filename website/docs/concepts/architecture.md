@@ -45,17 +45,17 @@ flowchart LR
 
 ### Stages explained
 
-| Stage | Description |
-|-------|-------------|
-| **check_login** | Validates stored cookies against the API |
-| **fetch_book_info** | Gets book metadata (title, authors, ISBN, TOC) from the v2 API |
-| **enrich_metadata** | Resolves additional publisher/subject data |
-| **fetch_chapters** | Downloads each chapter's HTML content sequentially |
-| **process_chapters** | Parses HTML with lxml, rewrites internal links, discovers assets |
-| **download_assets** | Fetches CSS, fonts, images, and videos sequentially in that order |
-| **render_content_opf** | Generates the OPF manifest and spine |
-| **render_toc_ncx** | Generates the NCX table of contents |
-| **build_epub** | Packages everything into a ZIP with EPUB structure |
+| Stage                  | Description                                                       |
+| ---------------------- | ----------------------------------------------------------------- |
+| **check_login**        | Validates stored cookies against the API                          |
+| **fetch_book_info**    | Gets book metadata (title, authors, ISBN, TOC) from the v2 API    |
+| **enrich_metadata**    | Resolves additional publisher/subject data                        |
+| **fetch_chapters**     | Downloads each chapter's HTML content sequentially                |
+| **process_chapters**   | Parses HTML with lxml, rewrites internal links, discovers assets  |
+| **download_assets**    | Fetches CSS, fonts, images, and videos sequentially in that order |
+| **render_content_opf** | Generates the OPF manifest and spine                              |
+| **render_toc_ncx**     | Generates the NCX table of contents                               |
+| **build_epub**         | Packages everything into a ZIP with EPUB structure                |
 
 ## Sequential asset downloads
 

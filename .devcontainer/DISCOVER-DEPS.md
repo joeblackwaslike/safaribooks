@@ -10,19 +10,19 @@ lock files, then installs dependencies using the appropriate tool.
 
 Detection runs in this exact order. Within each language, the first matching file wins.
 
-| Signal file | Tool invoked | Notes |
-|---|---|---|
-| `pnpm-lock.yaml` | `pnpm install` | Respects workspace root |
-| `bun.lockb` | `bun install` | |
-| `yarn.lock` | `yarn install` | |
-| `package-lock.json` | `npm ci` | Strict reproducible install |
-| `package.json` (no lock) | `npm install` | Creates a lock file |
-| `pyproject.toml` | `uv sync` | Falls back silently if uv fails |
-| `requirements.txt` | `uv pip install -r` | Falls back to pip if uv unavailable |
-| `Cargo.toml` | `cargo fetch` | Pre-fetches crates; does not build |
-| `go.mod` | `go mod download` | Pre-fetches modules |
-| `Gemfile` | `bundle install` | Only if `bundle` is in PATH |
-| `.devcontainer/custom-setup.sh` | `bash .devcontainer/custom-setup.sh` | Always runs last |
+| Signal file                     | Tool invoked                         | Notes                               |
+| ------------------------------- | ------------------------------------ | ----------------------------------- |
+| `pnpm-lock.yaml`                | `pnpm install`                       | Respects workspace root             |
+| `bun.lockb`                     | `bun install`                        |                                     |
+| `yarn.lock`                     | `yarn install`                       |                                     |
+| `package-lock.json`             | `npm ci`                             | Strict reproducible install         |
+| `package.json` (no lock)        | `npm install`                        | Creates a lock file                 |
+| `pyproject.toml`                | `uv sync`                            | Falls back silently if uv fails     |
+| `requirements.txt`              | `uv pip install -r`                  | Falls back to pip if uv unavailable |
+| `Cargo.toml`                    | `cargo fetch`                        | Pre-fetches crates; does not build  |
+| `go.mod`                        | `go mod download`                    | Pre-fetches modules                 |
+| `Gemfile`                       | `bundle install`                     | Only if `bundle` is in PATH         |
+| `.devcontainer/custom-setup.sh` | `bash .devcontainer/custom-setup.sh` | Always runs last                    |
 
 ---
 

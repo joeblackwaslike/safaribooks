@@ -29,18 +29,20 @@ Type the number and press Enter. The selected book is then downloaded.
 
 ## Tips for effective searches
 
-| Search term | Results |
-|------------|---------|
-| `"Fluent Python"` | Books with "Fluent Python" in the title |
-| `"Python Data Science"` | Broader match across Python data science titles |
-| `"9781492056348"` | Direct ID lookup (skips search, downloads immediately) |
+| Search term             | Results                                                |
+| ----------------------- | ------------------------------------------------------ |
+| `"Fluent Python"`       | Books with "Fluent Python" in the title                |
+| `"Python Data Science"` | Broader match across Python data science titles        |
+| `"9781492056348"`       | Direct ID lookup (skips search, downloads immediately) |
 
 :::tip
 If you already know the book ID or have the URL, pass it directly to skip the search step:
+
 ```bash
 safari fetch 9781492056348
 safari fetch "https://learning.oreilly.com/library/view/fluent-python-2nd/9781492056348/"
 ```
+
 :::
 
 ## Combining search with other books

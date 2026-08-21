@@ -31,6 +31,7 @@ Base exception for all safaribooks errors. Catch this to handle any error from t
 Raised when authentication fails.
 
 **Common causes:**
+
 - Expired session cookies (401/403 from API)
 - Invalid or corrupted JWT token
 - Session revoked server-side
@@ -42,6 +43,7 @@ Raised when authentication fails.
 Raised when cookie validation fails.
 
 **Common causes:**
+
 - Missing required cookies (`groot_sessionid`, `jwt`, `csrf_access_token`, `logged_in`)
 - Cookie file not found at `~/.config/safaribooks/cookies.json`
 - Cookie file has incorrect permissions
@@ -53,6 +55,7 @@ Raised when cookie validation fails.
 Raised when an API request fails after all retry attempts are exhausted.
 
 **Common causes:**
+
 - O'Reilly API is down or returning errors
 - Invalid book ID or URL
 - Network connectivity issues
@@ -65,6 +68,7 @@ Raised when an API request fails after all retry attempts are exhausted.
 Raised when HTML/XML parsing fails.
 
 **Common causes:**
+
 - Malformed HTML in chapter content
 - Unexpected page structure from API changes
 - lxml processing errors
@@ -76,6 +80,7 @@ Raised when HTML/XML parsing fails.
 Raised when an asset download (images, CSS, fonts, videos) fails after all retry attempts.
 
 **Common causes:**
+
 - Asset URL returns 404
 - CDN issues for image/font hosting
 - Network timeout during large image downloads
@@ -87,6 +92,7 @@ Raised when an asset download (images, CSS, fonts, videos) fails after all retry
 Raised when a title search fails.
 
 **Common causes:**
+
 - Empty search query
 - API search endpoint returns an error
 - No results found for the query

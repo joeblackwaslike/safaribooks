@@ -31,10 +31,10 @@ flowchart LR
 
 ## Configuration
 
-| Flag | Environment Variable | Default | Description |
-|------|---------------------|---------|-------------|
-| `--rate-limit` / `-r` | `SAFARI_RATE_LIMIT` | `1.0` | Tokens added per second |
-| `--rate-burst` | `SAFARI_RATE_BURST` | `2` | Maximum bucket capacity |
+| Flag                  | Environment Variable | Default | Description             |
+| --------------------- | -------------------- | ------- | ----------------------- |
+| `--rate-limit` / `-r` | `SAFARI_RATE_LIMIT`  | `1.0`   | Tokens added per second |
+| `--rate-burst`        | `SAFARI_RATE_BURST`  | `2`     | Maximum bucket capacity |
 
 ### Examples
 

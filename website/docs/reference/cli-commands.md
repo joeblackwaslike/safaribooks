@@ -14,10 +14,10 @@ safaribooks provides the `safari` CLI with two main subcommands: `fetch` and `au
 safari [OPTIONS]
 ```
 
-| Option | Description |
-|--------|-------------|
+| Option             | Description           |
+| ------------------ | --------------------- |
 | `--version` / `-v` | Show version and exit |
-| `--debug` | Enable debug logging |
+| `--debug`          | Enable debug logging  |
 
 ---
 
@@ -31,25 +31,25 @@ safari fetch [OPTIONS] [BOOK_IDS]...
 
 ### Positional arguments
 
-| Argument | Description |
-|----------|-------------|
+| Argument   | Description                                                |
+| ---------- | ---------------------------------------------------------- |
 | `BOOK_IDS` | One or more book IDs, O'Reilly URLs, or title search terms |
 
 ### Options
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--playlist` / `-p` | `UUID` | -- | Download all books from a playlist |
-| `--file` / `-f` | `path` | -- | File with book IDs, one per line |
-| `--kindle` | `bool` | `false` | Add Kindle-compatible CSS |
-| `--output` / `-o` | `path` | `Books/` | Output directory |
-| `--library-dir` | `path` | `~/.safaribooks/` | Central EPUB library directory |
-| `--rate-limit` / `-r` | `float` | `1.0` | Max requests per second |
-| `--rate-burst` | `int` | `2` | Burst capacity for rate limiter |
-| `--image-max-size` | `int` | `0` | Max image dimension (0 = no resize) |
-| `--image-quality` | `int` | `0` | JPEG quality 1-95 (0 = keep original) |
-| `--ssl-skip` | `bool` | `false` | Skip SSL verification |
-| `--preserve-log` | `bool` | `false` | Keep log file even without errors |
+| Flag                  | Type    | Default           | Description                           |
+| --------------------- | ------- | ----------------- | ------------------------------------- |
+| `--playlist` / `-p`   | `UUID`  | --                | Download all books from a playlist    |
+| `--file` / `-f`       | `path`  | --                | File with book IDs, one per line      |
+| `--kindle`            | `bool`  | `false`           | Add Kindle-compatible CSS             |
+| `--output` / `-o`     | `path`  | `Books/`          | Output directory                      |
+| `--library-dir`       | `path`  | `~/.safaribooks/` | Central EPUB library directory        |
+| `--rate-limit` / `-r` | `float` | `1.0`             | Max requests per second               |
+| `--rate-burst`        | `int`   | `2`               | Burst capacity for rate limiter       |
+| `--image-max-size`    | `int`   | `0`               | Max image dimension (0 = no resize)   |
+| `--image-quality`     | `int`   | `0`               | JPEG quality 1-95 (0 = keep original) |
+| `--ssl-skip`          | `bool`  | `false`           | Skip SSL verification                 |
+| `--preserve-log`      | `bool`  | `false`           | Keep log file even without errors     |
 
 ### Examples
 
@@ -102,9 +102,9 @@ Extract cookies directly from a browser's cookie store.
 safari auth extract [OPTIONS]
 ```
 
-| Flag | Type | Default | Description |
-|------|------|---------|-------------|
-| `--browser` | `string` | -- | Browser to extract from: `chrome`, `firefox`, `edge`, `chromium` |
+| Flag        | Type     | Default | Description                                                      |
+| ----------- | -------- | ------- | ---------------------------------------------------------------- |
+| `--browser` | `string` | --      | Browser to extract from: `chrome`, `firefox`, `edge`, `chromium` |
 
 ```bash
 safari auth extract --browser chrome
@@ -118,10 +118,10 @@ Import cookies from a header string or file.
 safari auth import [OPTIONS]
 ```
 
-| Flag | Type | Description |
-|------|------|-------------|
+| Flag       | Type     | Description                          |
+| ---------- | -------- | ------------------------------------ |
 | `--header` | `string` | Cookie header string (from DevTools) |
-| `--file` | `path` | Path to JSON cookie file |
+| `--file`   | `path`   | Path to JSON cookie file             |
 
 ```bash
 # From header string
