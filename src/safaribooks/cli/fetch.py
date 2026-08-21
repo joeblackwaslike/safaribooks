@@ -10,9 +10,11 @@ import typer
 from rich.console import Console
 from rich.progress import BarColumn, Progress, SpinnerColumn, TaskID, TextColumn, TimeElapsedColumn
 
+from safaribooks.cli.ui import select_book
 from safaribooks.core.config import AppConfig
 from safaribooks.core.downloader import BookDownloader, extract_book_id, fetch_playlist_book_ids
 from safaribooks.core.exceptions import SafariBooksError
+from safaribooks.core.log import configure_async_logging
 
 if TYPE_CHECKING:
     from safaribooks.core.api import ApiClient
@@ -191,7 +193,9 @@ class _Resolver:
         if not (inputs.title_queries or playlist):
             return all_ids
 
-        from safaribooks.core.api import ApiClient
+        # Deferred: tests patch `safaribooks.core.api.ApiClient` directly, which
+        # only takes effect if the name is looked up fresh at call time.
+        from safaribooks.core.api import ApiClient  # noqa: PLC0415
 
         async with ApiClient(self._config) as client:
             await self._resolve_titles(client, inputs.title_queries, all_ids)
@@ -215,7 +219,9 @@ class _Resolver:
 
     async def _resolve_one_query(self, client: "ApiClient", query: str) -> str | None:
         """Resolve a single title query into a book ID, or ``None``."""
-        from safaribooks.core.search import search_books
+        # Deferred: tests patch `safaribooks.core.search.search_books` directly,
+        # which only takes effect if the name is looked up fresh at call time.
+        from safaribooks.core.search import search_books  # noqa: PLC0415
 
         self._con.print(f'[cyan]Searching for[/] "[bold]{query}[/]"...')
         try:
@@ -231,8 +237,6 @@ class _Resolver:
 
     def _pick_book_id(self, found: list["SearchResult"], query: str) -> str | None:
         """Pick a book ID from results, auto-selecting a sole match or prompting."""
-        from safaribooks.cli.ui import select_book
-
         if len(found) > 1:
             selected = select_book(self._con, found, query)
         else:
@@ -277,7 +281,6 @@ class _Pipeline:
         self._log_handler: Any = None
 
     async def __aenter__(self) -> "_Pipeline":
-        from safaribooks.core.log import configure_async_logging
 
         self._log_handler = configure_async_logging(
             level=logging.DEBUG if self._config.debug else logging.INFO,

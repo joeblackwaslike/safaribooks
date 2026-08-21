@@ -82,7 +82,7 @@ def _build_cover_page(cover_img_src: str) -> tuple[str, html.HtmlElement]:  # ty
     return _COVER_PAGE_CSS, cover_html
 
 
-def _maybe_apply_cover(  # type: ignore[no-any-unimported]
+def maybe_apply_cover(  # type: ignore[no-any-unimported]
     content_el: html.HtmlElement,
     page_css: str,
     *,

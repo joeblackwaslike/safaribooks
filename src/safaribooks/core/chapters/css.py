@@ -80,7 +80,7 @@ def _collect_inline_css(root: html.HtmlElement) -> str:  # type: ignore[no-any-u
     return "".join(fragments)
 
 
-def _collect_page_css(  # type: ignore[no-any-unimported]
+def collect_page_css(  # type: ignore[no-any-unimported]
     root: html.HtmlElement,
     chapter_stylesheets: list[str],
     known_css: list[str],

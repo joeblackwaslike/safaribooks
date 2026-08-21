@@ -143,14 +143,14 @@ def parse_chapter_html(  # type: ignore[no-any-unimported]
 
     """
     discovered_css: list[str] = []
-    page_css = css._collect_page_css(
+    page_css = css.collect_page_css(
         root, chapter_stylesheets, known_css, context.base_url, discovered_css
     )
 
     _convert_svg_images(root)
 
     content_el, discovered_videos = _extract_content_element(root, context.book_id)
-    page_css, content_el, cover_src = cover._maybe_apply_cover(
+    page_css, content_el, cover_src = cover.maybe_apply_cover(
         content_el, page_css, first_page=context.first_page
     )
 

@@ -39,7 +39,7 @@ class _BrowserExtractor:
     def _loaders(self) -> dict[str, Callable[..., Any]]:
         """Return the supported ``browser_cookie3`` loader callables."""
         try:
-            import browser_cookie3
+            import browser_cookie3  # noqa: PLC0415 -- optional dependency, imported lazily
         except ImportError:
             msg = (
                 "browser_cookie3 is not installed. "

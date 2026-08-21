@@ -60,7 +60,8 @@ async def _download_single_image(
     quality: int = 0,
 ) -> str | None:
     """Download a single image file. Returns the saved filename or ``None``."""
-    from safaribooks.core import assets
+    from safaribooks.core import assets  # noqa: PLC0415 -- avoids a circular import:
+    # assets/__init__.py imports this module to re-export download_images, etc.
 
     image_name = url.split("/")[-1]
     image_path = images_dir / image_name
