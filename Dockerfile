@@ -15,4 +15,5 @@ USER appuser
 
 VOLUME ["/app/Books"]
 
-ENTRYPOINT ["uv", "run", "safari", "fetch"]
+ENTRYPOINT ["uv", "run", "safari"]
+CMD ["fetch"]
