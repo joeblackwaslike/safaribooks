@@ -1,7 +1,7 @@
 """Filesystem paths and directory-name sanitization for EPUB builds."""
 
 import logging
-import sys
+import sys as sys  # noqa: PLC0414 -- re-exported via epub/__init__.py for test patching
 from dataclasses import astuple, dataclass
 from pathlib import Path
 from typing import Final

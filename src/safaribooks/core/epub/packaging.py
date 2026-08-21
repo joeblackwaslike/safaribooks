@@ -1,7 +1,7 @@
 """Chapter HTML writing and EPUB (ZIP) packaging."""
 
 import logging
-import zipfile
+import zipfile as zipfile  # noqa: PLC0414 -- re-exported via epub/__init__.py for test patching
 from pathlib import Path
 from typing import ClassVar
 

@@ -5,6 +5,7 @@ import logging
 import os
 import sys
 from pathlib import Path
+from typing import cast
 
 from safaribooks.core.constants import REQUIRED_COOKIES
 from safaribooks.core.exceptions import CookieError
@@ -35,7 +36,7 @@ class _Validator:
     def _cookie_set_cls(self) -> type[CookieSet]:
         """Resolve ``CookieSet`` from the package so test patches apply."""
         cookie_pkg = sys.modules["safaribooks.core.cookies"]
-        return cookie_pkg.CookieSet
+        return cast("type[CookieSet]", cookie_pkg.CookieSet)
 
     def _warn_on_suspicious(self, cookies: dict[str, str]) -> None:
         """Emit soft warnings for sparse or empty-valued cookie dicts."""
