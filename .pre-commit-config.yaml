@@ -1,0 +1,49 @@
+default_language_version:
+  python: python3.12
+default_install_hook_types: [pre-commit, commit-msg, pre-push]
+default_stages: [pre-commit]
+repos:
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: "v4.4.0"
+    hooks:
+      - id: check-case-conflict
+      - id: check-merge-conflict
+      - id: check-toml
+      - id: check-yaml
+      - id: end-of-file-fixer
+      - id: trailing-whitespace
+
+  - repo: https://github.com/astral-sh/ruff-pre-commit
+    rev: "v0.14.9"
+    hooks:
+      - id: ruff
+        args: [--exit-non-zero-on-fix]
+      - id: ruff-format
+
+  - repo: https://github.com/wemake-services/wemake-python-styleguide
+    rev: 1.4.0
+    hooks:
+      - id: wemake-python-styleguide
+
+  - repo: https://github.com/pre-commit/mirrors-prettier
+    rev: "v3.0.3"
+    hooks:
+      - id: prettier
+
+  - repo: https://github.com/commitizen-tools/commitizen
+    rev: v4.16.3
+    hooks:
+      - id: commitizen
+        stages: [commit-msg]
+
+  # Full test suite + coverage. Runs on pre-push (≈40s) rather than
+  # pre-commit so it gates pushes without slowing every commit.
+  - repo: local
+    hooks:
+      - id: tests
+        name: tests (pytest + coverage)
+        entry: uv run python -m pytest tests --cov --cov-config=pyproject.toml --cov-report=term-missing -p no:faulthandler
+        language: system
+        types: [python]
+        pass_filenames: false
+        stages: [pre-push]
