@@ -2,6 +2,7 @@
 
 import json
 import logging
+import os
 import sys
 from pathlib import Path
 
@@ -67,7 +68,15 @@ def save(cookies: CookieSet, output: Path) -> None:
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
     payload = f"{json.dumps(cookies.cookies, indent=2)}\n"
-    output.write_text(payload, encoding="utf-8")
+
+    descriptor = os.open(
+        output,
+        os.O_WRONLY | os.O_CREAT | os.O_TRUNC,
+        _OWNER_ONLY_MODE,
+    )
+    with os.fdopen(descriptor, "w", encoding="utf-8") as cookie_stream:
+        cookie_stream.write(payload)
+
     try:
         output.chmod(_OWNER_ONLY_MODE)
     except OSError:
