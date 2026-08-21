@@ -8,7 +8,6 @@ from PIL import Image
 
 from safaribooks import core
 from safaribooks.core.assets import (
-    ImageOptions,
     _download_single_css,
     _download_single_image,
     _download_single_video,
@@ -18,6 +17,7 @@ from safaribooks.core.assets import (
     download_images,
     download_videos,
 )
+from safaribooks.core.assets.download import ImageOptions
 from safaribooks.core.constants import SAFARI_BASE_URL
 
 BOOK_ID = "9781234567890"

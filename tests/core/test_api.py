@@ -49,7 +49,7 @@ TEST_URL = "https://example.test/api/thing"
 _IDENTICAL_MATCH = "identical to the expired session"
 _RELOAD_FAIL_MATCH = "could not reload cookies"
 _AUTH_FAILED_MATCH = "authentication failed"
-_FROM_BROWSER = "safaribooks.core.api.cookie_mod.from_browser"
+_FROM_BROWSER = "safaribooks.core.api.session_cookies.cookie_mod.from_browser"
 
 _VALID_DICT = dict(VALID_COOKIES)
 _FRESH_DICT = dict(FRESH_COOKIES)
