@@ -67,7 +67,7 @@ def _prompt_for_choice(console: Console, books: list[SearchResult]) -> SearchRes
 
 def select_book(
     console: Console,
-    results: list[SearchResult],
+    search_results: list[SearchResult],
     query: str,
 ) -> SearchResult | None:
     """Present search results and prompt the user to select one.
@@ -76,7 +76,7 @@ def select_book(
     ----------
     console:
         Rich console for output.
-    results:
+    search_results:
         List of search results to display.
     query:
         The original search query (shown in the header).
@@ -87,15 +87,17 @@ def select_book(
         The selected result, or ``None`` if the user cancels.
 
     """
-    if not results:
+    if not search_results:
         return None
 
-    console.print(f'\n[bold]Found {len(results)} book(s) matching[/] "[cyan]{query}[/]":\n')
-    console.print(_build_results_table(results))
+    console.print(
+        f'\n[bold]Found {len(search_results)} book(s) matching[/] "[cyan]{query}[/]":\n',
+    )
+    console.print(_build_results_table(search_results))
     console.print()
 
     if not console.is_terminal:
         console.print("[yellow]Non-interactive mode — auto-selecting first result.[/]")
-        return _announce_selection(console, results[0])
+        return _announce_selection(console, search_results[0])
 
-    return _prompt_for_choice(console, results)
+    return _prompt_for_choice(console, search_results)

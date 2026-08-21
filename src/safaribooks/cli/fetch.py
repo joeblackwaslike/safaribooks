@@ -79,7 +79,9 @@ class _ProgressCallback:
         self._progress.update(tid, completed=current, total=total or _FALLBACK_TOTAL)
 
 
-def fetch_cmd(
+def fetch_cmd(  # noqa: WPS211 -- one param per CLI flag; Typer has no native
+    # way to expand a dataclass/model into flags (checked current Typer docs),
+    # so grouping these into a config object would break flag generation.
     ctx: typer.Context,
     book_ids: Annotated[
         list[str] | None,
@@ -90,7 +92,7 @@ def fetch_cmd(
         str | None,
         typer.Option("--playlist", "-p", help="Download all books from a playlist UUID."),
     ] = None,
-    file: Annotated[
+    id_file: Annotated[
         Path | None,
         typer.Option("--file", "-f", help="File with book IDs, one per line."),
     ] = None,
@@ -131,7 +133,7 @@ def fetch_cmd(
     debug = (ctx.obj or {}).get("debug", False)
 
     # Validate at least one source of book IDs or title queries
-    if not book_ids and not playlist and not file:
+    if not book_ids and not playlist and not id_file:
         console.print("[red]Error:[/] Provide book IDs, titles, --playlist, or --file.")
         raise typer.Exit(code=1)
 
@@ -151,7 +153,7 @@ def fetch_cmd(
     config = AppConfig(**config_kwargs)  # type: ignore[arg-type]
 
     # Collect and partition inputs
-    inputs = _CollectedInputs.collect(book_ids, file)
+    inputs = _CollectedInputs.collect(book_ids, id_file)
 
     # Run async pipeline
     asyncio.run(_fetch_async(config, inputs, playlist, console))

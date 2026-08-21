@@ -6,14 +6,8 @@ from typing import Annotated
 import typer
 from rich.console import Console
 
+from safaribooks.core import cookies as cookie_mod
 from safaribooks.core.config import AppConfig
-from safaribooks.core.cookies import (
-    from_browser,
-    from_file,
-    from_header,
-    from_paste,
-    save,
-)
 from safaribooks.core.exceptions import CookieError
 
 app = typer.Typer(
@@ -52,12 +46,12 @@ def setup(
     """Interactive cookie paste — paste cookies from your browser."""
     dest = output or _default_cookie_path()
     try:
-        cookie_set = from_paste()
+        cookie_set = cookie_mod.from_paste()
     except CookieError as exc:
         console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
-    save(cookie_set, dest)
+    cookie_mod.save(cookie_set, dest)
     console.print(f"[green]Cookies saved to {dest}[/] ({len(cookie_set.cookies)} cookies)")
 
 
@@ -76,19 +70,19 @@ def extract(
     """Extract cookies from an installed browser automatically."""
     dest = output or _default_cookie_path()
     try:
-        cookie_set = from_browser(browser)
+        cookie_set = cookie_mod.from_browser(browser)
     except CookieError as exc:
         console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
-    save(cookie_set, dest)
+    cookie_mod.save(cookie_set, dest)
     console.print(f"[green]Cookies saved to {dest}[/] ({len(cookie_set.cookies)} cookies)")
 
 
 @app.command(name="import")
 def import_cookies(
     *,
-    file: Annotated[
+    import_file: Annotated[
         Path | None,
         typer.Option(
             "--file", "-f", help="Path to a cookie file (JSON, header, or extension export)."
@@ -104,24 +98,24 @@ def import_cookies(
     ] = None,
 ) -> None:
     """Import cookies from a file or header string."""
-    if not file and not header:
+    if not import_file and not header:
         console.print(f"{_ERROR_PREFIX} Provide --file or --header.")
         raise typer.Exit(code=1)
 
     dest = output or _default_cookie_path()
     try:
-        if file:
-            cookie_set = from_file(file)
+        if import_file:
+            cookie_set = cookie_mod.from_file(import_file)
         else:
             if header is None:  # guarded above; defensive fallback
                 console.print(f"{_ERROR_PREFIX} Provide --file or --header.")
                 raise typer.Exit(code=1)
-            cookie_set = from_header(header)
+            cookie_set = cookie_mod.from_header(header)
     except CookieError as exc:
         console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
 
-    save(cookie_set, dest)
+    cookie_mod.save(cookie_set, dest)
     console.print(f"[green]Cookies saved to {dest}[/] ({len(cookie_set.cookies)} cookies)")
 
 
@@ -140,7 +134,7 @@ def validate_cmd(
         raise typer.Exit(code=1)
 
     try:
-        cookie_set = from_file(path)
+        cookie_set = cookie_mod.from_file(path)
     except CookieError as exc:
         console.print(f"{_ERROR_PREFIX} {exc}")
         raise typer.Exit(code=1) from None
@@ -162,7 +156,7 @@ def status() -> None:
         return
 
     try:
-        cookie_set = from_file(path)
+        cookie_set = cookie_mod.from_file(path)
     except CookieError as exc:
         console.print(f"[red]Status:[/] Invalid — {exc}")
         return

@@ -246,7 +246,7 @@ class TestAuthImportErrors:
         directly with no source raises ``typer.Exit(1)`` from the guard.
         """
         with pytest.raises(typer.Exit) as excinfo:
-            import_cookies(file=None, header=None)
+            import_cookies(import_file=None, header=None)
         assert excinfo.value.exit_code == _EXIT_FAIL
 
 
@@ -269,7 +269,7 @@ class TestAuthSetup:
         cookie_set = validate(_VALID_COOKIES_DICT)
 
         with patch(
-            "safaribooks.cli.auth.from_paste",
+            "safaribooks.cli.auth.cookie_mod.from_paste",
             return_value=cookie_set,
         ):
             outcome = _invoke("auth", "setup", "--output", dest, expect=_EXIT_OK)
@@ -285,7 +285,7 @@ class TestAuthSetup:
         cookie_set = validate(_VALID_COOKIES_DICT)
 
         with (
-            patch("safaribooks.cli.auth.from_paste", return_value=cookie_set),
+            patch("safaribooks.cli.auth.cookie_mod.from_paste", return_value=cookie_set),
             patch(
                 "safaribooks.cli.auth._default_cookie_path",
                 return_value=dest,
@@ -300,7 +300,7 @@ class TestAuthSetup:
         dest = cookie_path
 
         with patch(
-            "safaribooks.cli.auth.from_paste",
+            "safaribooks.cli.auth.cookie_mod.from_paste",
             side_effect=CookieError("nothing pasted"),
         ):
             outcome = _invoke("auth", "setup", "--output", dest)
@@ -319,7 +319,7 @@ class TestAuthExtract:
         cookie_set = validate(_VALID_COOKIES_DICT)
 
         with patch(
-            "safaribooks.cli.auth.from_browser",
+            "safaribooks.cli.auth.cookie_mod.from_browser",
             return_value=cookie_set,
         ) as mock_browser:
             outcome = _invoke(
@@ -343,7 +343,7 @@ class TestAuthExtract:
         cookie_set = validate(_VALID_COOKIES_DICT)
 
         with patch(
-            "safaribooks.cli.auth.from_browser",
+            "safaribooks.cli.auth.cookie_mod.from_browser",
             return_value=cookie_set,
         ) as mock_browser:
             _invoke("auth", "extract", "--output", dest, expect=_EXIT_OK)
@@ -355,7 +355,7 @@ class TestAuthExtract:
         cookie_set = validate(_VALID_COOKIES_DICT)
 
         with (
-            patch("safaribooks.cli.auth.from_browser", return_value=cookie_set),
+            patch("safaribooks.cli.auth.cookie_mod.from_browser", return_value=cookie_set),
             patch(
                 "safaribooks.cli.auth._default_cookie_path",
                 return_value=dest,
@@ -370,7 +370,7 @@ class TestAuthExtract:
         dest = cookie_path
 
         with patch(
-            "safaribooks.cli.auth.from_browser",
+            "safaribooks.cli.auth.cookie_mod.from_browser",
             side_effect=CookieError("Unsupported browser 'opera'"),
         ):
             outcome = _invoke("auth", "extract", "--browser", "opera", "--output", dest)
