@@ -268,9 +268,7 @@ class _BookBuilder:
         content_opf = render_content_opf(
             book_info,
             chapters,
-            book_paths.styles,
-            book_paths.images,
-            book_paths.videos,
+            book_paths,
             font_files,
             cover_src=cover_src,
         )

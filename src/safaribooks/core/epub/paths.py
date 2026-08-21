@@ -29,6 +29,10 @@ _UNSAFE_CHARS: Final = frozenset((
     ":",
 ))
 
+_COLON: Final = ":"
+_TITLE_TRUNCATE_INDEX: Final = 15
+_REPLACEMENT_CHAR: Final = "_"
+
 
 @dataclass
 class BookPaths:
@@ -41,6 +45,21 @@ class BookPaths:
     images: Path
     videos: Path
     meta_inf: Path
+
+
+def _truncate_at_colon(name: str) -> str:
+    """Truncate *name* at a late colon, or normalize an early one on Windows.
+
+    Mirrors the legacy ``escape_dirname`` behaviour.
+    """
+    if _COLON not in name:
+        return name
+    colon_index = name.index(_COLON)
+    if colon_index > _TITLE_TRUNCATE_INDEX:
+        return name.split(_COLON)[0]
+    if "win" in sys.platform:
+        return name.replace(_COLON, ",")
+    return name
 
 
 def sanitize_dirname(name: str, *, clean_space: bool = False) -> str:
@@ -63,19 +82,11 @@ def sanitize_dirname(name: str, *, clean_space: bool = False) -> str:
         A filesystem-safe directory name.
 
     """
-    colon = ":"
-    title_truncate_index = 15
-    replacement_char = "_"
-    if colon in name:
-        colon_index = name.index(colon)
-        if colon_index > title_truncate_index:
-            name = name.split(colon)[0]
-        elif "win" in sys.platform:
-            name = name.replace(colon, ",")
+    name = _truncate_at_colon(name)
 
     for unsafe in _UNSAFE_CHARS:
         if unsafe in name:
-            name = name.replace(unsafe, replacement_char)
+            name = name.replace(unsafe, _REPLACEMENT_CHAR)
 
     if clean_space:
         name = name.replace(" ", "")

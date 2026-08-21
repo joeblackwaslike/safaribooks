@@ -75,9 +75,7 @@ def _opf_for(book_info: BookInfo, chapters, paths: epub_mod.BookPaths, **kwargs)
     return render_content_opf(
         book_info,
         chapters,
-        paths.styles,
-        paths.images,
-        paths.videos,
+        paths,
         fonts=kwargs.pop("fonts", []),
         **kwargs,
     )
@@ -419,12 +417,19 @@ class TestRenderContentOpfAssets:
     def test_missing_asset_dirs_handled(self, tmp_path, chapters):
         # css_dir / images_dir do not exist => is_dir() false branches.
         missing = tmp_path / "nope"
+        missing_paths = epub_mod.BookPaths(
+            book_dir=missing,
+            oebps=missing / "OEBPS",
+            text=missing / "Text",
+            styles=missing / "Styles",
+            images=missing / "Images",
+            videos=missing / "Video",
+            meta_inf=missing / "META-INF",
+        )
         opf = render_content_opf(
             _book_info(),
             chapters,
-            missing / "Styles",
-            missing / "Images",
-            missing / "Video",
+            missing_paths,
             fonts=[],
         )
         assert "ch01.xhtml" in opf

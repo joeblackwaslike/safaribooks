@@ -7,6 +7,7 @@ from types import MappingProxyType
 from typing import ClassVar
 
 from safaribooks.core.constants import CONTENT_OPF
+from safaribooks.core.epub.paths import BookPaths
 from safaribooks.core.models import BookInfo, Chapter
 
 
@@ -125,9 +126,7 @@ class _AssetScanner:
 def render_content_opf(
     book_info: BookInfo,
     chapters: list[Chapter],
-    css_dir: Path,
-    images_dir: Path,
-    videos_dir: Path,
+    book_paths: BookPaths,
     fonts: list[str],
     *,
     cover_src: str | None = None,
@@ -143,12 +142,9 @@ def render_content_opf(
         Validated book metadata.
     chapters:
         Ordered list of chapters (used for manifest and spine).
-    css_dir:
-        Path to the ``Styles/`` directory.
-    images_dir:
-        Path to the ``Images/`` directory.
-    videos_dir:
-        Path to the ``Video/`` directory.
+    book_paths:
+        Resolved directory paths for the book (uses ``styles``,
+        ``images``, and ``videos``).
     fonts:
         List of font filenames that were downloaded.
     cover_src:
@@ -163,10 +159,10 @@ def render_content_opf(
     scanner = _AssetScanner()
     builder = _ManifestItems()
     builder.add_chapters(chapters)
-    builder.add_images(scanner.discover_images(images_dir))
-    builder.add_styles(scanner.discover_css(css_dir))
+    builder.add_images(scanner.discover_images(book_paths.images))
+    builder.add_styles(scanner.discover_css(book_paths.styles))
     builder.add_fonts(fonts)
-    builder.add_videos(videos_dir)
+    builder.add_videos(book_paths.videos)
 
     first_chapter = _to_xhtml(chapters[0].filename) if chapters else ""
 
