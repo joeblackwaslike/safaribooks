@@ -6,6 +6,7 @@ import shutil
 import tempfile
 from collections.abc import Awaitable, Callable
 from pathlib import Path
+from typing import Any, NamedTuple
 
 from safaribooks.core.api import ApiClient
 from safaribooks.core.assets import (
@@ -54,6 +55,14 @@ _ProcessChapters = Callable[
     [ApiClient, list[Chapter], BookPaths],
     Awaitable[_ChapterAssetsTuple],
 ]
+
+
+class _DiscoveredAssetUrls(NamedTuple):
+    """Asset URLs discovered while processing chapters, ready for download."""
+
+    css_urls: _UrlList
+    image_urls: _UrlList
+    video_urls: _UrlList
 
 
 class _ChapterAssets:
@@ -181,7 +190,8 @@ class _BookBuilder:
 
         collected = await self._process_chapters(self.client, chapters, self.book_paths)
         cover_src = await self._ensure_cover(chapters, collected[3])
-        font_files = await self._download_assets(collected[:3])
+        urls = _DiscoveredAssetUrls(*collected[:3])
+        font_files = await self._download_assets(urls)
         await self._write_epub_files(chapters, font_files, cover_src=cover_src)
 
         logger.info("Creating EPUB file...")
@@ -201,14 +211,12 @@ class _BookBuilder:
         logger.info("Downloaded default cover: %s", cover_filename)
         return f"{_IMAGES_PREFIX}/{cover_filename}"
 
-    async def _download_assets(self, urls: tuple[list[str], list[str], list[str]]) -> list[str]:
+    async def _download_assets(self, urls: _DiscoveredAssetUrls) -> list[str]:
         """Download CSS, fonts, images, and videos. Returns discovered font files."""
-        all_css, all_images, all_videos = urls
-
-        logger.info("Downloading CSS... (%d files)", len(all_css))
+        logger.info("Downloading CSS... (%d files)", len(urls.css_urls))
         await download_css(
             self.client,
-            all_css,
+            urls.css_urls,
             self.book_paths.styles,
             self.book_id,
             progress_callback=self._make_callback("css"),
@@ -222,10 +230,10 @@ class _BookBuilder:
             progress_callback=self._make_callback("fonts"),
         )
 
-        logger.info("Downloading images... (%d files)", len(all_images))
+        logger.info("Downloading images... (%d files)", len(urls.image_urls))
         await download_images(
             self.client,
-            all_images,
+            urls.image_urls,
             self.book_paths.images,
             ImageOptions(
                 max_size=self.config.image_max_size,
@@ -234,11 +242,11 @@ class _BookBuilder:
             progress_callback=self._make_callback("images"),
         )
 
-        if all_videos:
-            logger.info("Downloading videos... (%d files)", len(all_videos))
+        if urls.video_urls:
+            logger.info("Downloading videos... (%d files)", len(urls.video_urls))
             await download_videos(
                 self.client,
-                all_videos,
+                urls.video_urls,
                 self.book_paths.videos,
                 progress_callback=self._make_callback("videos"),
             )
@@ -509,6 +517,16 @@ def extract_book_id(input_str: str) -> str | None:
     return None
 
 
+def _matches_playlist(playlist: Any, playlist_id: str) -> bool:
+    """Return ``True`` when *playlist*'s UUID or slug equals *playlist_id*."""
+    return playlist_id in {playlist.get("uuid"), playlist.get("slug")}
+
+
+def _entry_ourn(entry: Any) -> Any:
+    """Return a playlist content entry's OURN, falling back to its identifier."""
+    return entry.get("ourn", entry.get("identifier", ""))
+
+
 async def fetch_playlist_book_ids(client: ApiClient, playlist_id: str) -> list[str]:
     """Fetch book IDs from an O'Reilly playlist/collection.
 
@@ -543,15 +561,14 @@ async def fetch_playlist_book_ids(client: ApiClient, playlist_id: str) -> list[s
     playlists = payload if isinstance(payload, list) else payload.get("results", [])  # type: ignore[unreachable]
 
     target = next(
-        (pl for pl in playlists if playlist_id in {pl.get("uuid"), pl.get("slug")}),
+        (pl for pl in playlists if _matches_playlist(pl, playlist_id)),
         None,
     )
     if target is None:
         raise ApiError(f"Playlist '{playlist_id}' not found.")
 
-    content_ourns = "\n".join(
-        entry.get("ourn", entry.get("identifier", "")) for entry in target.get("content", [])
-    )
+    content_entries = target.get("content", [])
+    content_ourns = "\n".join(_entry_ourn(entry) for entry in content_entries)
     book_ids = _URN_BOOK_ID_LINE_RE.findall(content_ourns)
     logger.info("Found %d books in playlist '%s'.", len(book_ids), playlist_id)
     return book_ids
