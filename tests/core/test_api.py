@@ -218,7 +218,8 @@ class TestTryCookieRefreshDiskErrors:
             connected_client._try_cookie_refresh()
 
     def test_raises_when_disk_not_a_dict(self, connected_client):
-        connected_client.config.cookies_file.write_text(json.dumps([1, 2, 3]), encoding="utf-8")
+        payload = json.dumps([1, 2, 3])
+        connected_client.config.cookies_file.write_text(payload, encoding="utf-8")
 
         with pytest.raises(AuthenticationError, match="does not contain a JSON object"):
             connected_client._try_cookie_refresh()
@@ -482,7 +483,8 @@ class TestHandleCookieUpdateEdgeCases:
 
 class TestParseJsonResponse:
     def test_parses_valid_json(self, plain_client):
-        resp = httpx.Response(_HTTP_OK, json={"ok": True}, request=httpx.Request("GET", TEST_URL))
+        request = httpx.Request("GET", TEST_URL)
+        resp = httpx.Response(_HTTP_OK, json={"ok": True}, request=request)
         assert plain_client.parse_json_response(resp) == {"ok": True}
 
     def test_accepts_javascript_content_type(self, plain_client):

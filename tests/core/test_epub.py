@@ -335,7 +335,8 @@ class TestRenderNavpoints:
         assert 'id="entry_id"' in xml
 
     def test_href_converted_to_xhtml_basename(self):
-        entries = [TocEntry(depth=1, fragment="", id="a", label="A", href="files/sub/ch01.html")]
+        entry = TocEntry(depth=1, fragment="", id="a", label="A", href="files/sub/ch01.html")
+        entries = [entry]
         xml, _, _ = _render_navpoints(entries)
         assert '<content src="ch01.xhtml"/>' in xml
 
@@ -346,7 +347,14 @@ class TestRenderNavpoints:
 
     def test_nested_children_bump_counter_depth(self):
         child = TocEntry(depth=2, fragment="s1", id="s1", label="S1", href="a.html#s1")
-        parent = TocEntry(depth=1, fragment="", id="a", label="A", href="a.html", children=[child])
+        parent = TocEntry(
+            depth=1,
+            fragment="",
+            id="a",
+            label="A",
+            href="a.html",
+            children=[child],
+        )
         xml, counter, max_depth = _render_navpoints([parent])
         assert counter == 2
         assert max_depth == 2
