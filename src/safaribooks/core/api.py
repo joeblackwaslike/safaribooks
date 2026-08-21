@@ -505,7 +505,7 @@ class ApiClient:
         if fresh == dict(self.client.cookies):
             return False
 
-        self.client.cookies.update(fresh)
+        self.client.cookies.update(dict(fresh))
         self.save_cookies()
         logger.info("Auto-refreshed cookies from %s.", browser)
         return True

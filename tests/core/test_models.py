@@ -160,6 +160,30 @@ class TestCookieSet:
         with pytest.raises(ValidationError, match="Missing required cookies"):
             models.CookieSet(cookies={})
 
+    def test_cookies_mapping_is_immutable(self):
+        cs = models.CookieSet(
+            cookies={
+                "groot_sessionid": "abc123",
+                "jwt": "token.value.here",
+                "csrf_access_token": "csrf_tok",
+                "logged_in": "1",
+            },
+        )
+        with pytest.raises(TypeError):
+            cs.cookies["jwt"] = "tampered"  # type: ignore[index]
+
+    def test_reassigning_cookies_attribute_raises(self):
+        cs = models.CookieSet(
+            cookies={
+                "groot_sessionid": "abc123",
+                "jwt": "token.value.here",
+                "csrf_access_token": "csrf_tok",
+                "logged_in": "1",
+            },
+        )
+        with pytest.raises(ValidationError):
+            cs.cookies = {"jwt": "tampered"}  # type: ignore[misc]
+
 
 class TestSearchResult:
     def test_book_id_prefers_archive_id(self):

@@ -67,7 +67,7 @@ def save(cookies: CookieSet, output: Path) -> None:
     """Write a validated cookie set to a JSON file with restricted permissions."""
     output = Path(output)
     output.parent.mkdir(parents=True, exist_ok=True)
-    payload = f"{json.dumps(cookies.cookies, indent=2)}\n"
+    payload = f"{json.dumps(dict(cookies.cookies), indent=2)}\n"
 
     descriptor = os.open(
         output,
