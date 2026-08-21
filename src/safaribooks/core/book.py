@@ -99,12 +99,12 @@ async def fetch_book_info(client: ApiClient, book_id: str) -> BookInfo:
 async def enrich_book_metadata(
     client: ApiClient,
     book_id: str,
-    info: BookInfo,
+    book_info: BookInfo,
 ) -> BookInfo:
-    """Enrich *info* with supplementary data from the search API.
+    """Enrich *book_info* with supplementary data from the search API.
 
     This is a best-effort operation: if the search API is unreachable or
-    returns no results, the original *info* is returned unchanged.
+    returns no results, the original *book_info* is returned unchanged.
 
     Parameters
     ----------
@@ -112,7 +112,7 @@ async def enrich_book_metadata(
         Authenticated API client.
     book_id:
         The O'Reilly book identifier.
-    info:
+    book_info:
         Base book metadata to enrich.
 
     Returns:
@@ -122,14 +122,14 @@ async def enrich_book_metadata(
 
     """
     try:
-        updates = await _Metadata.build_updates(client, book_id, info)
+        updates = await _Metadata.build_updates(client, book_id, book_info)
     except Exception:
         logger.warning("Could not enrich metadata from search API", exc_info=True)
-        return info
+        return book_info
 
     if updates:
-        return info.model_copy(update=updates)
-    return info
+        return book_info.model_copy(update=updates)
+    return book_info
 
 
 async def fetch_chapters(client: ApiClient, book_id: str) -> list[Chapter]:

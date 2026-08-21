@@ -6,8 +6,8 @@ from pathlib import Path
 from typing import ClassVar
 
 from safaribooks.core.constants import (
-    BASE_01_HTML,
-    BASE_02_HTML,
+    BASE_HTML_HEAD,
+    BASE_HTML_TAIL,
     CONTAINER_XML,
     EREADER_CSS,
 )
@@ -25,7 +25,7 @@ def write_chapter_html(
     """Write a single chapter XHTML file.
 
     Wraps the CSS and body content in the standard EPUB XHTML template
-    (``BASE_01_HTML`` + ``EREADER_CSS`` + ``BASE_02_HTML``).
+    (``BASE_HTML_HEAD`` + ``EREADER_CSS`` + ``BASE_HTML_TAIL``).
 
     Parameters
     ----------
@@ -37,7 +37,7 @@ def write_chapter_html(
         The XHTML body fragment.
 
     """
-    template = BASE_01_HTML + EREADER_CSS + BASE_02_HTML
+    template = BASE_HTML_HEAD + EREADER_CSS + BASE_HTML_TAIL
 
     html = template.format(css_content, body_content)
     path.write_bytes(html.encode("utf-8", "xmlcharrefreplace"))

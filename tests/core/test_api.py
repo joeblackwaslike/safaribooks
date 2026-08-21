@@ -619,7 +619,7 @@ class TestPostRequests:
     @respx.mock
     async def test_post_form_data(self, live_client):
         route = _mock_post(return_value=_make_response(_HTTP_OK, json={}))
-        await live_client.post(TEST_URL, data={"field": "val"})
+        await live_client.post(TEST_URL, form_data={"field": "val"})
         assert route.called
         assert b"field=val" in route.calls.last.request.content
 

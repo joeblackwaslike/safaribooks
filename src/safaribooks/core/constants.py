@@ -69,10 +69,8 @@ BROWSER_JS: str = (
     "o[c.substring(0,i)]=c.substring(i+1); return o; }, {}))"
 )
 
-# ---------------------------------------------------------------------------
 # HTML templates for EPUB generation
-# ---------------------------------------------------------------------------
-BASE_01_HTML = (
+BASE_HTML_HEAD = (
     "<!DOCTYPE html>\n"
     '<html lang="en" xml:lang="en" xmlns="http://www.w3.org/1999/xhtml"'
     ' xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"'
@@ -95,7 +93,7 @@ EREADER_CSS = (
     "overflow-y:unset!important;white-space:pre-wrap!important;}}"
 )
 
-BASE_02_HTML = "</style></head>\n<body>{1}</body>\n</html>"
+BASE_HTML_TAIL = "</style></head>\n<body>{1}</body>\n</html>"
 
 CONTAINER_XML = (
     '<?xml version="1.0"?>'

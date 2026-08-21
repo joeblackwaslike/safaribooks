@@ -226,7 +226,7 @@ class ApiClient:
     async def post(
         self,
         url: str,
-        data: dict[str, Any] | None = None,
+        form_data: dict[str, Any] | None = None,
         *,
         json_payload: dict[str, Any] | None = None,
     ) -> httpx.Response:
@@ -236,10 +236,10 @@ class ApiClient:
         ----------
         url:
             The URL to POST to.
-        data:
+        form_data:
             Form-encoded data payload.
         json_payload:
-            JSON-encoded payload (mutually exclusive with *data*).
+            JSON-encoded payload (mutually exclusive with *form_data*).
 
         Returns:
         -------
@@ -257,7 +257,7 @@ class ApiClient:
         return await self._request(
             url,
             is_post=True,
-            payload=_PostPayload(form_data=data, json_payload=json_payload),
+            payload=_PostPayload(form_data=form_data, json_payload=json_payload),
         )
 
     async def get_json(self, url: str) -> dict[str, Any]:
