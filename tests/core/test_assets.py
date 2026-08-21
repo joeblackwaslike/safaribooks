@@ -8,6 +8,7 @@ from PIL import Image
 
 from safaribooks import core
 from safaribooks.core.assets import (
+    ImageOptions,
     _download_single_css,
     _download_single_image,
     _download_single_video,
@@ -337,7 +338,7 @@ class TestDownloadCss:
 class TestDownloadImages:
     async def test_empty_list_returns_empty(self, tmp_path):
         client = _make_client()
-        downloaded = await download_images(client, [], tmp_path, BOOK_ID)
+        downloaded = await download_images(client, [], tmp_path)
         _assert_empty(downloaded)
         client.get.assert_not_awaited()
 
@@ -349,9 +350,7 @@ class TestDownloadImages:
             client,
             ["x/a.png"],
             tmp_path,
-            BOOK_ID,
-            max_size=_DOWNLOAD_MAX,
-            quality=_DOWNLOAD_QUALITY,
+            ImageOptions(max_size=_DOWNLOAD_MAX, quality=_DOWNLOAD_QUALITY),
         )
         assert downloaded == ["a.png"]
         spy.assert_called_once_with(tmp_path / "a.png", _DOWNLOAD_MAX, _DOWNLOAD_QUALITY)

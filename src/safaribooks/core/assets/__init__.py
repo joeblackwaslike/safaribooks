@@ -4,6 +4,7 @@
 
 from safaribooks.core.assets.concurrency import _parallel_download
 from safaribooks.core.assets.download import (
+    ImageOptions,
     _download_single_css,
     _download_single_image,
     _download_single_video,
@@ -16,6 +17,7 @@ from safaribooks.core.assets.resize import _HAS_PILLOW, resize_image
 
 __all__ = [  # noqa: WPS410  -- public re-export surface for the assets package
     "_HAS_PILLOW",
+    "ImageOptions",
     "_download_single_css",
     "_download_single_image",
     "_download_single_video",

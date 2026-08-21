@@ -8,7 +8,13 @@ from collections.abc import Awaitable, Callable
 from pathlib import Path
 
 from safaribooks.core.api import ApiClient
-from safaribooks.core.assets import download_css, download_fonts, download_images, download_videos
+from safaribooks.core.assets import (
+    ImageOptions,
+    download_css,
+    download_fonts,
+    download_images,
+    download_videos,
+)
 from safaribooks.core.book import (
     enrich_book_metadata,
     fetch_book_info,
@@ -221,9 +227,10 @@ class _BookBuilder:
             self.client,
             all_images,
             self.book_paths.images,
-            self.book_id,
-            max_size=self.config.image_max_size,
-            quality=self.config.image_quality,
+            ImageOptions(
+                max_size=self.config.image_max_size,
+                quality=self.config.image_quality,
+            ),
             progress_callback=self._make_callback("images"),
         )
 

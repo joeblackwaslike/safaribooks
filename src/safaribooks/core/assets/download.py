@@ -2,6 +2,7 @@
 
 import logging
 from collections.abc import Callable
+from dataclasses import dataclass
 from pathlib import Path
 from urllib.parse import urljoin
 
@@ -12,6 +13,14 @@ from safaribooks.core.constants import SAFARI_BASE_URL
 logger = logging.getLogger(__name__)
 
 _HTTP_OK = 200
+
+
+@dataclass(frozen=True)
+class ImageOptions:
+    """Image resize options for :func:`download_images`."""
+
+    max_size: int = 0
+    quality: int = 0
 
 
 async def _download_single_css(
@@ -136,7 +145,9 @@ async def download_css(
     if not css_urls:
         return []
 
-    coros = [_download_single_css(client, url, css_dir, idx) for idx, url in enumerate(css_urls)]
+    coros = []
+    for idx, url in enumerate(css_urls):
+        coros.append(_download_single_css(client, url, css_dir, idx))
     return await _parallel_download(coros, progress_callback=progress_callback)
 
 
@@ -144,10 +155,8 @@ async def download_images(
     client: ApiClient,
     image_urls: list[str],
     images_dir: Path,
-    book_id: str,
+    options: ImageOptions | None = None,
     *,
-    max_size: int = 0,
-    quality: int = 0,
     progress_callback: Callable[[int, int], None] | None = None,
 ) -> list[str]:
     """Download all images for a book.
@@ -160,12 +169,9 @@ async def download_images(
         List of image URLs to download.
     images_dir:
         Destination ``Images/`` directory.
-    book_id:
-        Book identifier (unused directly, reserved for future use).
-    max_size:
-        Maximum image dimension in pixels (0 = no resize).
-    quality:
-        JPEG quality (0 = keep original).
+    options:
+        Image resize options (max dimension and JPEG quality). Defaults to
+        no resizing when omitted.
     progress_callback:
         Optional ``(total, completed)`` progress callback.
 
@@ -178,8 +184,15 @@ async def download_images(
     if not image_urls:
         return []
 
+    options = options or ImageOptions()
     coros = [
-        _download_single_image(client, url, images_dir, max_size=max_size, quality=quality)
+        _download_single_image(
+            client,
+            url,
+            images_dir,
+            max_size=options.max_size,
+            quality=options.quality,
+        )
         for url in image_urls
     ]
     return await _parallel_download(coros, progress_callback=progress_callback)
