@@ -1,8 +1,9 @@
 # Claude Code Devcontainer
 
 A Claude Code–optimised development environment for any project. Mirrors the local macOS
-toolchain inside a Linux container so agents can run with `--dangerously-skip-permissions`
-with a contained blast radius.
+toolchain inside a Linux container, giving AI coding agents a contained blast radius. If you
+choose to run an agent with a flag like `--dangerously-skip-permissions` (which bypasses all
+permission prompts), the container's isolation limits what that agent can affect on the host.
 
 ---
 

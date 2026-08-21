@@ -180,13 +180,13 @@ Theme configured in `.devcontainer/.mytheme.omp.yaml` (copied into the container
 
 ## AI / agent tools summary
 
-| Tool                 | Source                               | Notes                                                                |
-| -------------------- | ------------------------------------ | -------------------------------------------------------------------- |
-| claude (Claude Code) | npm: `@anthropic-ai/claude-code`     | Alias `claude='claude --dangerously-skip-permissions'` set in .zshrc |
-| gemini-cli           | npm: `@google/gemini-cli`            | Google Gemini terminal agent                                         |
-| beads (`bd`)         | Go: `github.com/steveyegge/beads`    | Task management for Claude Code                                      |
-| gastown (`gt`)       | Go: `github.com/gastownhall/gastown` | Multi-agent workspace orchestration; depends on dolt                 |
-| opencode             | **not yet installed**                | Binary not on npm; TODO: add GitHub release download when stable     |
+| Tool                 | Source                               | Notes                                                            |
+| -------------------- | ------------------------------------ | ---------------------------------------------------------------- |
+| claude (Claude Code) | npm: `@anthropic-ai/claude-code`     | No default permission-skip alias; run with flags as needed       |
+| gemini-cli           | npm: `@google/gemini-cli`            | Google Gemini terminal agent                                     |
+| beads (`bd`)         | Go: `github.com/steveyegge/beads`    | Task management for Claude Code                                  |
+| gastown (`gt`)       | Go: `github.com/gastownhall/gastown` | Multi-agent workspace orchestration; depends on dolt             |
+| opencode             | **not yet installed**                | Binary not on npm; TODO: add GitHub release download when stable |
 
 ---
 

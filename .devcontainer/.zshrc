@@ -120,9 +120,6 @@ fi
 export ENABLE_EXPERIMENTAL_MCP_CLI=true
 export CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1
 
-# in-container claude runs without permission prompts
-alias claude='claude --dangerously-skip-permissions'
-
 # opencode
 export OPENCODE_AGENT_SKILLS_SUPERPOWERS_MODE=true
 
