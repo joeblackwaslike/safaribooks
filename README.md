@@ -8,6 +8,8 @@
 
 > Download O'Reilly books as EPUB files. Async. Cookie-based auth that actually works.
 
+## Note
+
 For personal and educational use only. Please read O'Reilly's [Terms of Service](https://learning.oreilly.com/terms/).
 
 > **Upgrading from v1?** The CLI moved from `python3 safaribooks.py <ID>` to `safari fetch <ID>`. Run `safari --help` for the new commands. The old scripts remain as `_safaribooks_legacy.py` for reference only.
