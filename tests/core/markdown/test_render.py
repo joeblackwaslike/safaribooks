@@ -22,7 +22,8 @@ def test_heading_is_demoted_one_level() -> None:
 
 
 def test_redundant_heading_skipped() -> None:
-    body = _render(ir.Heading(1, (ir.Text("Intro"),)), title="Intro")
+    heading = ir.Heading(1, (ir.Text("Intro"),))
+    body = _render(heading, title="Intro")
     # Only the chapter heading remains; the duplicate in-body heading is dropped.
     assert body.count("Intro") == 1
 
@@ -44,31 +45,37 @@ def test_code_span_backtick_escalation() -> None:
 
 
 def test_hard_line_break() -> None:
-    rendered = render_inlines((ir.Text("a"), ir.LineBreak(), ir.Text("b")))
+    inlines = (ir.Text("a"), ir.LineBreak(), ir.Text("b"))
+    rendered = render_inlines(inlines)
     assert rendered == "a  \nb"
 
 
-def test_code_block_fence_widens_for_internal_backticks() -> None:
+def test_code_fence_widens_for_backticks() -> None:
     body = _render(ir.CodeBlock("```\ninner\n```", "py"))
     assert "````py" in body
 
 
+def _cell(text: str) -> ir.TableCell:
+    return ir.TableCell((ir.Text(text),))
+
+
 def test_table_with_header() -> None:
-    table = ir.Table(
-        header=(ir.TableCell((ir.Text("H1"),)), ir.TableCell((ir.Text("H2"),))),
-        rows=((ir.TableCell((ir.Text("a"),)), ir.TableCell((ir.Text("b|c"),))),),
-    )
+    header = (_cell("H1"), _cell("H2"))
+    rows = ((_cell("a"), _cell("b|c")),)
+    table = ir.Table(header=header, rows=rows)
     body = _render(table)
     assert "| H1 | H2 |" in body
     assert "| --- | --- |" in body
-    assert "b\\|c" in body
+    assert r"b\|c" in body
 
 
 def test_footnotes_render_after_rule() -> None:
+    paragraph = ir.Paragraph((ir.Text("body"), ir.FootnoteRef("c0-fn1")))
+    footnote_body = ir.Paragraph((ir.Text("note"),))
     chapter = ir.ChapterIR(
         title="C",
-        blocks=(ir.Paragraph((ir.Text("body"), ir.FootnoteRef("c0-fn1"))),),
-        footnotes=(ir.FootnoteDef("c0-fn1", (ir.Paragraph((ir.Text("note"),)),)),),
+        blocks=(paragraph,),
+        footnotes=(ir.FootnoteDef("c0-fn1", (footnote_body,)),),
     )
     body = Renderer().render((chapter,)).body
     assert "[^c0-fn1]" in body
