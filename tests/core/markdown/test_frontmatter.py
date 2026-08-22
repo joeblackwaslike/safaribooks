@@ -14,14 +14,31 @@ from safaribooks.core.markdown.frontmatter import (
 )
 from safaribooks.core.markdown.render import ChapterOffset
 
+_TEST_LARGE_NUMBER = 123456
+_TEST_BYTE_OFFSET = 40
+
 
 def _meta() -> ir.BookMeta:
     return ir.BookMeta(title="Book", authors=("A",), isbn="9781234567890", source_file="b.epub")
 
 
+def _sample_offsets() -> list[ChapterOffset]:
+    first = ChapterOffset(byte=0, line=1)
+    second = ChapterOffset(byte=_TEST_BYTE_OFFSET, line=5)
+    return [first, second]
+
+
+def _build_sample() -> tuple[str, list[ChapterRange], list[ChapterOffset]]:
+    titles = ["One", "Two"]
+    offsets = _sample_offsets()
+    body = "## One\n\naaa\n\n## Two\n\nbbb\n"
+    front_matter, ranges = build(_meta(), titles, offsets, body)
+    return front_matter, ranges, offsets
+
+
 def test_pad_number_constant_width() -> None:
     assert len(pad_number(5, "c")) == NUMERIC_WIDTH
-    assert len(pad_number(123456, "c")) == NUMERIC_WIDTH
+    assert len(pad_number(_TEST_LARGE_NUMBER, "c")) == NUMERIC_WIDTH
     assert pad_number(7, "c").strip() == "7"
 
 
@@ -38,14 +55,10 @@ def test_yaml_inline_quoting() -> None:
 
 
 def test_build_size_invariant_between_passes() -> None:
-    meta = _meta()
-    titles = ["One", "Two"]
-    offsets = [ChapterOffset(byte=0, line=1), ChapterOffset(byte=40, line=5)]
-    body = "## One\n\naaa\n\n## Two\n\nbbb\n"
     # build() returns the front matter only (not concatenated with the body).
-    front_matter, ranges = build(meta, titles, offsets, body)
-    fm_lines = front_matter.count("\n")
-    assert ranges[0].start_line == offsets[0].line + fm_lines
+    front_matter, ranges, offsets = _build_sample()
+    expected_start_line = offsets[0].line + front_matter.count("\n")
+    assert ranges[0].start_line == expected_start_line
     assert front_matter.startswith("---\n")
     assert ranges[0].end_line == ranges[1].start_line - 1
 

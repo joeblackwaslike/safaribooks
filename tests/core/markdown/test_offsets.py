@@ -22,27 +22,37 @@ class _Entry:
     end_byte: int
 
 
+def _chapter_lines(text: str) -> list[str]:
+    """Return the lines inside the front matter's ``chapters:`` block."""
+    lines = text.split("\n")
+    start = lines.index("chapters:") + 1
+    end = lines.index("---", start)
+    return lines[start:end]
+
+
+def _extract_title(stripped: str) -> str:
+    """Pull the quoted chapter title out of a ``- title: "..."`` line."""
+    return stripped.split("title:", 1)[1].strip().strip('"')
+
+
+def _apply_field(current: dict[str, object], stripped: str) -> None:
+    """Parse a ``key: value`` line into one of *current*'s integer fields."""
+    key, _, field_value = stripped.partition(":")
+    current[key.strip()] = int(field_value)
+
+
 def _parse_frontmatter(text: str) -> list[_Entry]:
     """Parse chapter entries from the YAML front matter by scanning lines."""
     entries: list[_Entry] = []
-    in_chapters = False
     current: dict[str, object] = {}
-    for line in text.split("\n"):
-        if line == "chapters:":
-            in_chapters = True
-            continue
-        if not in_chapters:
-            continue
-        if line == "---":
-            break
+    for line in _chapter_lines(text):
         stripped = line.strip()
         if stripped.startswith("- title:"):
             if current:
                 entries.append(_to_entry(current))
-            current = {"title": stripped.split("title:", 1)[1].strip().strip('"')}
+            current = {"title": _extract_title(stripped)}
         elif ":" in stripped:
-            key, _, value = stripped.partition(":")
-            current[key.strip()] = int(value)
+            _apply_field(current, stripped)
     if current:
         entries.append(_to_entry(current))
     return entries
@@ -59,9 +69,11 @@ def _to_entry(raw: dict[str, object]) -> _Entry:
 
 
 def _convert(tmp_path: Path, *, extensions: list[str] | None = None) -> Path:
+    filler = "bbb " * 60
+    more_paragraphs = "<p>more</p>" * 5
     specs = [
         ChapterSpec("First", "<p>aaa</p>"),
-        ChapterSpec("Second", "<p>" + "bbb " * 60 + "</p>" + "<p>more</p>" * 5),
+        ChapterSpec("Second", f"<p>{filler}</p>{more_paragraphs}"),
         ChapterSpec("Third", "<p>ccc</p>"),
     ]
     epub = build_epub(tmp_path / "off.epub", "Off", specs)
@@ -85,15 +97,20 @@ def test_line_offsets_seek_to_heading(tmp_path: Path) -> None:
         assert lines[entry.start_line - 1].startswith(f"## {entry.title}")
 
 
+def _assert_ranges_tile(entries: list[_Entry], total_lines: int) -> None:
+    """Assert consecutive entries abut with no gaps, and the last reaches EOF."""
+    for earlier, later in pairwise(entries):
+        assert earlier.end_line == later.start_line - 1
+        assert earlier.end_byte == later.start_byte - 1
+    assert entries[-1].end_line == total_lines
+
+
 def test_ranges_tile_the_file(tmp_path: Path) -> None:
     md = _convert(tmp_path)
     text = md.read_text("utf-8")
     entries = _parse_frontmatter(text)
-    for earlier, later in pairwise(entries):
-        assert earlier.end_line == later.start_line - 1
-        assert earlier.end_byte == later.start_byte - 1
     total_lines = text.count("\n")  # body ends with newline
-    assert entries[-1].end_line == total_lines
+    _assert_ranges_tile(entries, total_lines)
 
 
 def test_offsets_survive_extensions(tmp_path: Path) -> None:
