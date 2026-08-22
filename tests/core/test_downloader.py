@@ -572,14 +572,15 @@ def _md_config(tmp_path, **flags) -> AppConfig:
     )
 
 
+def _write_placeholder_markdown(_epub, dest, **_kwargs):
+    """Write a placeholder .md file, standing in for a real ``convert_epub`` call."""
+    dest.write_text("md", encoding="utf-8")
+    return dest
+
+
 def _stub_convert(monkeypatch) -> MagicMock:
     """Stub convert_epub to write a placeholder .md and return its path."""
-
-    def _write(_epub, dest, **_kwargs):
-        dest.write_text("md", encoding="utf-8")
-        return dest
-
-    convert = MagicMock(side_effect=_write)
+    convert = MagicMock(side_effect=_write_placeholder_markdown)
     monkeypatch.setattr(dl, "convert_epub", convert)
     return convert
 
@@ -595,11 +596,11 @@ class TestRunMarkdown:
         )
         convert = _stub_convert(monkeypatch)
 
-        result = await _make_downloader(config).run()
+        downloaded_path = await _make_downloader(config).run()
 
-        assert result.suffix == ".epub"
-        assert result.exists()
-        md_path = config.output_dir / (result.stem + ".md")
+        assert downloaded_path.suffix == ".epub"
+        assert downloaded_path.exists()
+        md_path = config.output_dir / f"{downloaded_path.stem}.md"
         assert md_path.exists()
         convert.assert_called_once()
 
@@ -613,8 +614,8 @@ class TestRunMarkdown:
         )
         _stub_convert(monkeypatch)
 
-        result = await _make_downloader(config).run()
+        downloaded_path = await _make_downloader(config).run()
 
-        assert result.suffix == ".md"
-        assert result.exists()
+        assert downloaded_path.suffix == ".md"
+        assert downloaded_path.exists()
         assert not list(config.output_dir.glob("*.epub"))

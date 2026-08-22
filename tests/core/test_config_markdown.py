@@ -11,7 +11,7 @@ from safaribooks.core.config import AppConfig
 def _config_class(toml_path: Path) -> type[AppConfig]:
     """Return an AppConfig subclass that reads *toml_path* as its TOML source."""
 
-    class _ScopedConfig(AppConfig):
+    class _ScopedConfig(AppConfig):  # noqa: WPS431 -- needs a closure over toml_path
         model_config = SettingsConfigDict(
             env_prefix="SAFARI_",
             env_file=None,
