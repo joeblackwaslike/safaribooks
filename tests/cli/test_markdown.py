@@ -3,6 +3,7 @@
 from pathlib import Path
 from unittest.mock import MagicMock, patch
 
+import click
 from typer.testing import CliRunner
 
 from safaribooks.cli import app
@@ -29,10 +30,17 @@ def _invoke_markdown(*args: str, env: dict[str, str] | None = None):
 
 
 def test_markdown_help_registered() -> None:
-    invoke_result = _invoke_markdown("--help", env={"COLUMNS": "200"})
+    # CI renders this with ANSI color codes on (this shell's Console detects
+    # no color support, so it doesn't); Typer's option highlighter then styles
+    # a flag's leading "-" in a separate span from the rest of the name, so a
+    # plain substring check only breaks when color is on. Strip ANSI codes
+    # (see the identical fix in tests/cli/test_fetch.py) instead of guessing
+    # at console width, which has no effect here either.
+    invoke_result = _invoke_markdown("--help")
     assert invoke_result.exit_code == 0
-    assert "--output" in invoke_result.output
-    assert "--force" in invoke_result.output
+    output = click.unstyle(invoke_result.output)
+    assert "--output" in output
+    assert "--force" in output
 
 
 @patch("safaribooks.cli.markdown.AppConfig")
