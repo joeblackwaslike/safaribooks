@@ -28,13 +28,26 @@ class ChapterSpec:
     body: str
 
 
+def _manifest_item(chapter_index: int) -> str:
+    """Render a single content.opf manifest ``<item>`` entry."""
+    return (
+        f'    <item id="ch{chapter_index}" href="ch{chapter_index}.xhtml" '
+        'media-type="application/xhtml+xml"/>'
+    )
+
+
+def _itemref(chapter_index: int) -> str:
+    """Render a single content.opf spine ``<itemref>`` entry."""
+    return f'    <itemref idref="ch{chapter_index}"/>'
+
+
 def _content_opf(title: str, isbn: str, specs: list[ChapterSpec]) -> str:
     """Render a minimal content.opf with metadata, manifest, and spine."""
-    items = "\n".join(
-        f'    <item id="ch{i}" href="ch{i}.xhtml" media-type="application/xhtml+xml"/>'
-        for i, _ in enumerate(specs)
-    )
-    refs = "\n".join(f'    <itemref idref="ch{i}"/>' for i, _ in enumerate(specs))
+    indices = range(len(specs))
+    manifest_entries = [_manifest_item(index) for index in indices]
+    manifest_items = "\n".join(manifest_entries)
+    itemrefs = [_itemref(index) for index in indices]
+    refs = "\n".join(itemrefs)
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <package xmlns="http://www.idpf.org/2007/opf" version="3.0" unique-identifier="bookid">
   <metadata xmlns:dc="http://purl.org/dc/elements/1.1/">
@@ -47,7 +60,7 @@ def _content_opf(title: str, isbn: str, specs: list[ChapterSpec]) -> str:
   </metadata>
   <manifest>
     <item id="ncx" href="toc.ncx" media-type="application/x-dtbncx+xml"/>
-{items}
+{manifest_items}
   </manifest>
   <spine toc="ncx">
 {refs}
@@ -56,15 +69,21 @@ def _content_opf(title: str, isbn: str, specs: list[ChapterSpec]) -> str:
 """
 
 
+def _navpoint(chapter_index: int, spec: ChapterSpec) -> str:
+    """Render a single toc.ncx ``<navPoint>`` block for one chapter."""
+    nav_id = f"n{chapter_index}"
+    play_order = chapter_index + 1
+    content_src = f"ch{chapter_index}.xhtml"
+    return f"""    <navPoint id="{nav_id}" playOrder="{play_order}">
+      <navLabel><text>{spec.title}</text></navLabel>
+      <content src="{content_src}"/>
+    </navPoint>"""
+
+
 def _toc_ncx(specs: list[ChapterSpec]) -> str:
     """Render a minimal toc.ncx mapping chapter files to nav labels."""
-    points = "\n".join(
-        f"""    <navPoint id="n{i}" playOrder="{i + 1}">
-      <navLabel><text>{spec.title}</text></navLabel>
-      <content src="ch{i}.xhtml"/>
-    </navPoint>"""
-        for i, spec in enumerate(specs)
-    )
+    navpoints = [_navpoint(index, spec) for index, spec in enumerate(specs)]
+    points = "\n".join(navpoints)
     return f"""<?xml version="1.0" encoding="utf-8"?>
 <ncx xmlns="http://www.daisy.org/z3986/2005/ncx/" version="2005-1">
   <navMap>
@@ -74,7 +93,9 @@ def _toc_ncx(specs: list[ChapterSpec]) -> str:
 """
 
 
-def build_epub(path: Path, title: str, specs: list[ChapterSpec], *, isbn: str = "9781234567890") -> Path:
+def build_epub(
+    path: Path, title: str, specs: list[ChapterSpec], *, isbn: str = "9781234567890"
+) -> Path:
     """Write a minimal but valid EPUB to *path* and return it."""
     with zipfile.ZipFile(path, "w", zipfile.ZIP_DEFLATED) as zf:
         zf.writestr("mimetype", "application/epub+zip")

@@ -12,8 +12,9 @@ def _blocks(fragment: str) -> tuple[ir.Block, ...]:
 
 def test_paragraph_and_emphasis() -> None:
     blocks = _blocks("<p>hello <em>world</em></p>")
-    assert isinstance(blocks[0], ir.Paragraph)
-    children = blocks[0].children
+    para = blocks[0]
+    assert isinstance(para, ir.Paragraph)
+    children = para.children
     assert children[0] == ir.Text("hello ")
     assert isinstance(children[1], ir.Emphasis)
 
@@ -22,17 +23,19 @@ def test_tail_text_across_inline_elements() -> None:
     blocks = _blocks("<p>they <em>did</em><span> warn you</span>.</p>")
     para = blocks[0]
     assert isinstance(para, ir.Paragraph)
-    rendered = "".join(
-        c.value if isinstance(c, ir.Text) else "*X*" for c in para.children
+    rendered_children = (
+        child.value if isinstance(child, ir.Text) else "*X*" for child in para.children
     )
+    rendered = "".join(rendered_children)
     # Space before "warn" (from the span text) and trailing "." (em's tail) survive.
     assert rendered == "they *X* warn you."
 
 
 def test_heading_levels() -> None:
     blocks = _blocks("<h1>A</h1><h3>B</h3>")
-    assert isinstance(blocks[0], ir.Heading)
-    assert blocks[0].level == 1
+    heading = blocks[0]
+    assert isinstance(heading, ir.Heading)
+    assert heading.level == 1
     assert blocks[1].level == 3
 
 
@@ -69,7 +72,7 @@ def test_footnote_ref_and_def() -> None:
     )
     para, note = blocks
     assert isinstance(para, ir.Paragraph)
-    assert any(isinstance(c, ir.FootnoteRef) for c in para.children)
+    assert any(isinstance(child, ir.FootnoteRef) for child in para.children)
     assert isinstance(note, ir.FootnoteDef)
     assert note.identifier == "fn1"
 
