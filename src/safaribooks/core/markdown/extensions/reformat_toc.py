@@ -15,11 +15,15 @@ def _is_toc(title: str) -> bool:
     return bool(_TOC_RE.match(title.strip()))
 
 
+def _title_list_item(title: str) -> ir.ListItem:
+    """Wrap a chapter *title* as a single-paragraph list item."""
+    paragraph = ir.Paragraph((ir.Text(title),))
+    return ir.ListItem((paragraph,))
+
+
 def _toc_list(titles: list[str]) -> ir.ListBlock:
     """Build an unordered list of chapter titles."""
-    list_items = tuple(
-        ir.ListItem((ir.Paragraph((ir.Text(title),)),)) for title in titles
-    )
+    list_items = tuple(_title_list_item(title) for title in titles)
     return ir.ListBlock(ordered=False, items=list_items)
 
 

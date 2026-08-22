@@ -18,8 +18,7 @@ def assemble(document: EpubDocument) -> tuple[ir.BookMeta, tuple[ir.ChapterIR, .
     """Return book metadata and assembled chapters from a parsed EPUB."""
     meta = _book_meta(document.metadata)
     chapters = tuple(
-        _assemble_chapter(index, chapter)
-        for index, chapter in enumerate(document.chapters)
+        _assemble_chapter(index, chapter) for index, chapter in enumerate(document.chapters)
     )
     return meta, chapters
 

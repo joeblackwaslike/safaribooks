@@ -17,16 +17,18 @@ class ChapterRange:
     end_byte: int
 
 
+def _preliminary_range(title: str, offset: ChapterOffset) -> ChapterRange:
+    """Build a single body-relative range (start == end) for one chapter."""
+    return ChapterRange(title, offset.line, offset.line, offset.byte, offset.byte)
+
+
 def preliminary_ranges(
     titles: list[str],
     offsets: list[ChapterOffset],
 ) -> list[ChapterRange]:
     """Return body-relative ranges (start == end) used to size the front matter."""
     paired = zip(titles, offsets, strict=True)
-    return [
-        ChapterRange(title, off.line, off.line, off.byte, off.byte)
-        for title, off in paired
-    ]
+    return [_preliminary_range(title, offset) for title, offset in paired]
 
 
 def _spans(starts: list[int], total: int) -> list[tuple[int, int]]:

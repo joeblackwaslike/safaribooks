@@ -73,8 +73,6 @@ def _apply_extensions(
 ) -> tuple[ir.ChapterIR, ...]:
     """Resolve and run the configured extension pipeline over *chapters*."""
     resolved = pipeline.resolve(extensions)
-    anchors = frozenset(
-        note.identifier for chapter in chapters for note in chapter.footnotes
-    )
+    anchors = frozenset(note.identifier for chapter in chapters for note in chapter.footnotes)
     ctx = ExtCtx(book=meta, anchors=anchors)
     return pipeline.run(chapters, ctx, resolved)
