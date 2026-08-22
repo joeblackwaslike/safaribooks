@@ -96,6 +96,11 @@ class TestFetchHelp:
         assert "--ssl-skip" in output
         assert "--preserve-log" in output
 
+    def test_fetch_help_shows_markdown_options(self):
+        output = self._help_output()
+        assert "--markdown" in output
+        assert "--markdown-only" in output
+
     def _help_output(self) -> str:
         # CI renders this with ANSI color codes (this shell's Rich Console
         # detects no color support, so locally it doesn't); Typer's option
@@ -372,3 +377,17 @@ class TestFetchCLIOptions:
         config = mock_downloader_cls.call_args[0][0]
         assert config.image_max_size == _EXPECTED_IMAGE_MAX_SIZE
         assert config.image_quality == _EXPECTED_IMAGE_QUALITY
+
+    @patch("safaribooks.cli.fetch.BookDownloader")
+    def test_markdown_flag(self, mock_downloader_cls: MagicMock, tmp_path: Path):
+        _run_download(mock_downloader_cls, "9781234567890", "--markdown", output=tmp_path)
+        config = mock_downloader_cls.call_args[0][0]
+        assert config.markdown is True
+        assert config.markdown_only is False
+
+    @patch("safaribooks.cli.fetch.BookDownloader")
+    def test_markdown_only_flag(self, mock_downloader_cls: MagicMock, tmp_path: Path):
+        _run_download(mock_downloader_cls, "9781234567890", "--markdown-only", output=tmp_path)
+        config = mock_downloader_cls.call_args[0][0]
+        assert config.markdown is True
+        assert config.markdown_only is True

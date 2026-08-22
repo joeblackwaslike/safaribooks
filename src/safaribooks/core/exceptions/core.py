@@ -1,4 +1,4 @@
-"""Custom exception hierarchy for safaribooks."""
+"""Core exception hierarchy for safaribooks."""
 
 
 class SafariBooksError(Exception):
