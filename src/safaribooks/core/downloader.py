@@ -152,48 +152,26 @@ class _BookBuilder:
         md_path = self.config.output_dir / (stem + _MD_SUFFIX)
 
         if self.config.markdown_only:
-            result_path = await self._run_markdown_only(stem, md_path)
+            with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
+                self.book_paths = ensure_book_dirs(Path(tmp_dir))
+                self._epub_output_path = Path(tmp_dir) / (stem + _EPUB_SUFFIX)
+                logger.info("Build directory: %s", self.book_paths.book_dir)
+                epub_path = await self._build()
+                _MarkdownOutput(self.config, self._notify).write_markdown(epub_path, md_path)
+            result_path = md_path
         else:
-            result_path = await self._run_with_epub(stem, md_path)
+            self._epub_output_path = self.config.output_dir / (stem + _EPUB_SUFFIX)
+            with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
+                self.book_paths = ensure_book_dirs(Path(tmp_dir))
+                logger.info("Build directory: %s", self.book_paths.book_dir)
+                epub_path = await self._build()
+            result_path = _MarkdownOutput(self.config, self._notify).finalize_epub(
+                epub_path, md_path
+            )
 
         await client.stop_keepalive()
         client.save_cookies()
         return result_path
-
-    async def _run_with_epub(self, stem: str, md_path: Path) -> Path:
-        """Build the EPUB into the output dir, then optionally the Markdown file."""
-        self._epub_output_path = self.config.output_dir / (stem + _EPUB_SUFFIX)
-        with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
-            self.book_paths = ensure_book_dirs(Path(tmp_dir))
-            logger.info("Build directory: %s", self.book_paths.book_dir)
-            epub_path = await self._build()
-        _copy_to_library(self.config.library_dir, epub_path)
-        if self.config.markdown:
-            self._write_markdown(epub_path, md_path)
-        return epub_path
-
-    async def _run_markdown_only(self, stem: str, md_path: Path) -> Path:
-        """Build the EPUB into a temp dir, convert it, and keep only the Markdown."""
-        with tempfile.TemporaryDirectory(prefix="safaribooks_") as tmp_dir:
-            self.book_paths = ensure_book_dirs(Path(tmp_dir))
-            self._epub_output_path = Path(tmp_dir) / (stem + _EPUB_SUFFIX)
-            logger.info("Build directory: %s", self.book_paths.book_dir)
-            epub_path = await self._build()
-            self._write_markdown(epub_path, md_path)
-        return md_path
-
-    def _write_markdown(self, epub_path: Path, md_path: Path) -> None:
-        """Convert *epub_path* into an LLM-oriented Markdown file at *md_path*."""
-        logger.info("Converting to Markdown...")
-        self._notify("markdown", 0, 1)
-        convert_epub(
-            epub_path,
-            md_path,
-            extensions=self.config.markdown_extensions,
-            force=True,
-        )
-        self._notify("markdown", 1, 1)
-        logger.info("Markdown saved to: %s", md_path)
 
     async def _prepare(self) -> None:
         """Authenticate, start keepalive, and fetch enriched book metadata."""
@@ -312,12 +290,39 @@ class _BookBuilder:
         (book_paths.oebps / "toc.ncx").write_bytes(toc_ncx.encode(_XML_ENCODING, _XML_ERRORS))
 
 
-def _copy_to_library(library_dir: Path, epub_path: Path) -> None:
-    """Copy the finished EPUB into the central library directory."""
-    epubs_dir = library_dir / "epubs"
-    epubs_dir.mkdir(parents=True, exist_ok=True)
-    shutil.copy2(epub_path, epubs_dir / epub_path.name)
-    logger.info("Copied EPUB to library: %s", epubs_dir / epub_path.name)
+class _MarkdownOutput:
+    """Turns a freshly-built EPUB into the configured final output(s)."""
+
+    def __init__(self, config: AppConfig, notify: _NotifyCallback) -> None:
+        self._config = config
+        self._notify = notify
+
+    def finalize_epub(self, epub_path: Path, md_path: Path) -> Path:
+        """Copy the EPUB into the library and optionally convert it to Markdown."""
+        self._copy_to_library(epub_path)
+        if self._config.markdown:
+            self.write_markdown(epub_path, md_path)
+        return epub_path
+
+    def write_markdown(self, epub_path: Path, md_path: Path) -> None:
+        """Convert *epub_path* into an LLM-oriented Markdown file at *md_path*."""
+        logger.info("Converting to Markdown...")
+        self._notify("markdown", 0, 1)
+        convert_epub(
+            epub_path,
+            md_path,
+            extensions=self._config.markdown_extensions,
+            force=True,
+        )
+        self._notify("markdown", 1, 1)
+        logger.info("Markdown saved to: %s", md_path)
+
+    def _copy_to_library(self, epub_path: Path) -> None:
+        """Copy the finished EPUB into the central library directory."""
+        epubs_dir = self._config.library_dir / "epubs"
+        epubs_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(epub_path, epubs_dir / epub_path.name)
+        logger.info("Copied EPUB to library: %s", epubs_dir / epub_path.name)
 
 
 class BookDownloader:
